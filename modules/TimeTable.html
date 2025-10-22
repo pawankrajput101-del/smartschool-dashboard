@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Dynamic School Timetable</title>
+
+<!-- SheetJS for XLSX export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --accent:#2f80ed; --muted:#6b7280; --bg:#f4f7fb; --card:#fff; --danger:#e53e3e; --break:#ffeaa7;
+}
+*{box-sizing:border-box}
+body{font-family:Inter,Segoe UI,Roboto,Arial,sans-serif; margin:0; background:var(--bg); color:#222;}
+header{background:linear-gradient(90deg,var(--accent),#60a5fa); color:white; padding:14px 12px; text-align:center;}
+.container{padding:14px; max-width:1200px; margin:0 auto;}
+.topRow{display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap}
+.leftControls{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+input[type="text"]{padding:8px 10px; border-radius:8px; border:1px solid #d1d5db; min-width:260px}
+button, select{padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.05); background:var(--accent); color:#fff; cursor:pointer}
+button.ghost{background:#fff; color:var(--accent); border:1px solid var(--accent)}
+button.clearBtn{background:var(--danger); margin-left:auto}
+.panel{background:var(--card); padding:10px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.04); margin-bottom:12px;}
+table{width:100%; border-collapse:collapse; background:var(--card); margin-top:8px}
+thead th{background:var(--accent); color:#fff; padding:10px; position:sticky; top:0}
+th,td{border:1px solid #e6eefc; padding:8px; text-align:center; vertical-align:middle; font-size:13px}
+td.gradeCell{font-weight:700; background:#fbfdff; width:140px}
+.timeCell{width:140px; font-weight:800; background:#f7fbff}
+.breakRow td{background:var(--break); font-weight:800; text-align:center}
+select.cellSelect{width:100%; padding:6px; border-radius:6px}
+.conflicts{background:#fff6f6; color:var(--danger); padding:8px; border-radius:6px; margin-bottom:10px}
+.hidden{display:none}
+.small{font-size:12px; color:var(--muted)}
+.rightArea{margin-left:auto; display:flex; gap:8px}
+@media (max-width:960px){ .rightArea{margin-left:0} .leftControls{flex:1} }
+
+/* Print styles */
+@media print{
+  body{background:white}
+  header, .topRow, #manageModal, #substituteModal, #substitutionPanel{display:none}
+  .panel{box-shadow:none; border:none}
+  table{page-break-inside:avoid; border-collapse:collapse}
+  th,td{border:1px solid #222; padding:6px}
+  .printHeader{display:block; text-align:center; margin-bottom:12px}
+}
+.sub-row{display:flex; gap:8px; align-items:center; margin:6px 0}
+.sub-row > div {flex:1}
+.small-muted{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header><h2 style="margin:0">Dynamic School Timetable</h2></header>
+
+<div class="container">
+  <div class="topRow">
+    <!-- School name: editable in Edit Mode; shown read-only in views -->
+    <div id="schoolBox" style="display:flex; gap:8px; align-items:center;">
+      <label id="schoolLabel" style="font-weight:600;color:#0b3d91">School name</label>
+      <input id="schoolName" type="text" placeholder="Enter school name (appears on print & exports)" />
+    </div>
+
+    <div class="leftControls" style="margin-left:6px">
+      <!-- Management buttons (visible only in Edit Mode) -->
+      <button id="btnGrades">Grades</button>
+      <button id="btnSubjects">Subjects</button>
+      <button id="btnTeachers">Teachers</button>
+
+      <!-- Actions: Export JSON (edit only), Export XLSX (all modes), Import (edit only), Print (all modes), View -->
+      <button id="btnExportJSON">Export JSON</button>
+      <button id="btnExportXLSX">Export XLSX</button>
+      <button id="btnImport">Import</button>
+      <input id="fileImport" type="file" accept="application/json" style="display:none">
+      <button id="btnPrint">Print</button>
+
+      <label class="small" style="margin-left:8px; display:flex; align-items:center">View by</label>
+      <select id="viewBy">
+        <option value="edit">Edit Mode</option>
+        <option value="grade">Grade-wise</option>
+        <option value="teacher">Teacher-wise</option>
+      </select>
+      <select id="viewPick" class="hidden"></select>
+    </div>
+
+    <div class="rightArea" style="margin-left:auto;">
+      <!-- Substitution + Clear -->
+      <button id="btnSubstitution">Substitution</button>
+      <button id="btnClear" class="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <div id="conflictPanel" class="panel hidden"></div>
+  <div id="manageModal" class="panel hidden"></div>
+  <div id="substituteModal" class="panel hidden"></div>
+  <div id="substitutionPanel" class="panel hidden"></div>
+
+  <div id="timetablePanel" class="panel">
+    <div id="timetableContainer"></div>
+  </div>
+</div>
+
+<script>
+/* ================= Configuration & storage ================= */
+const STORAGE = {
+  subjects: 'tt_subjects_v1',
+  teachers: 'tt_teachers_v1',
+  grades: 'tt_grades_v1',
+  timetable: 'tt_timetable_v1',
+  school: 'tt_school_v1'
+};
+
+const DEFAULT_SUBJECTS = ["Math","English","Science","Hindi","Social Science","Computer","Art","Library","PE"];
+const DEFAULT_TEACHERS = ["Mr. Sharma","Ms. Gupta","Mr. Khan","Mrs. Patel","Mr. Roy","Ms. Reddy","Mr. Das"];
+const DEFAULT_GRADES = Array.from({length:12}, (_,i)=>`Grade ${i+1}`);
+
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const SLOTS = [
+  { time:"7:45 - 8:25", isBreak:false },
+  { time:"8:25 - 9:05", isBreak:false },
+  { time:"9:05 - 9:45", isBreak:false },
+  { time:"9:45 - 10:15", isBreak:true, name:"Brunch" },
+  { time:"10:15 - 10:55", isBreak:false },
+  { time:"10:55 - 11:35", isBreak:false },
+  { time:"11:35 - 12:05", isBreak:true, name:"Games" },
+  { time:"12:05 - 12:45", isBreak:false },
+  { time:"12:45 - 13:30", isBreak:false }
+];
+
+/* ================= App state ================= */
+let subjects = loadArray(STORAGE.subjects, DEFAULT_SUBJECTS);
+let teachers = loadArray(STORAGE.teachers, DEFAULT_TEACHERS);
+let grades   = loadArray(STORAGE.grades, DEFAULT_GRADES);
+let timetable = JSON.parse(localStorage.getItem(STORAGE.timetable) || '{}'); // keys: grade||dayIdx||slotIdx => {subject, teacher}
+let schoolName = localStorage.getItem(STORAGE.school) || '';
+
+/* ================= Elements ================= */
+const schoolNameEl = document.getElementById('schoolName');
+const schoolBox = document.getElementById('schoolBox');
+const timetableContainer = document.getElementById('timetableContainer');
+const conflictPanel = document.getElementById('conflictPanel');
+const manageModal = document.getElementById('manageModal');
+const substituteModal = document.getElementById('substituteModal');
+const substitutionPanel = document.getElementById('substitutionPanel');
+const viewBy = document.getElementById('viewBy');
+const viewPick = document.getElementById('viewPick');
+
+/* ================= Initialization ================= */
+schoolNameEl.value = schoolName;
+
+/* ================= Utilities ================= */
+function loadArray(key, def){ try{ const v=JSON.parse(localStorage.getItem(key)); if(Array.isArray(v) && v.length) return v; }catch(e){} return def.slice(); }
+function saveLists(){ localStorage.setItem(STORAGE.subjects, JSON.stringify(subjects)); localStorage.setItem(STORAGE.teachers, JSON.stringify(teachers)); localStorage.setItem(STORAGE.grades, JSON.stringify(grades)); }
+function saveTimetable(){ localStorage.setItem(STORAGE.timetable, JSON.stringify(timetable)); }
+function saveSchool(){ localStorage.setItem(STORAGE.school, schoolNameEl.value || ''); }
+function keyOf(grade, dayIdx, slotIdx){ return `${grade}||${dayIdx}||${slotIdx}`; }
+function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* ================= Render control bar & pick list ================= */
+function renderTopControls(){
+  // show/hide management & import/export/clear based on mode
+  if(viewBy.value === 'edit'){
+    // edit mode: management visible, other buttons visible
+    document.getElementById('btnGrades').style.display='inline-block';
+    document.getElementById('btnSubjects').style.display='inline-block';
+    document.getElementById('btnTeachers').style.display='inline-block';
+    document.getElementById('btnExportJSON').style.display='inline-block';
+    document.getElementById('btnImport').style.display='inline-block';
+    document.getElementById('btnClear').style.display='inline-block';
+    // school name editable
+    schoolNameEl.style.display='inline-block';
+    var schoolLabelEl = document.getElementById("schoolLabel"); if(schoolLabelEl) schoolLabelEl.style.display="inline-block";
+  } else {
+    // grade/teacher view: hide management & some buttons
+    document.getElementById('btnGrades').style.display='none';
+    document.getElementById('btnSubjects').style.display='none';
+    document.getElementById('btnTeachers').style.display='none';
+    document.getElementById('btnExportJSON').style.display='none';
+    document.getElementById('btnImport').style.display='none';
+    document.getElementById('btnClear').style.display='none';
+    // show school name as read-only large display (we keep the input hidden and show a styled label)
+    schoolNameEl.style.display='none';
+    var schoolLabelEl = document.getElementById("schoolLabel"); if(schoolLabelEl) schoolLabelEl.style.display="none";
+  }
+
+  // show/hide the secondary viewPick dropdown
+  if(viewBy.value === 'edit'){
+    viewPick.classList.add('hidden');
+  } else if(viewBy.value === 'grade'){
+    viewPick.classList.remove('hidden');
+    populateSelect(viewPick, grades);
+  } else {
+    viewPick.classList.remove('hidden');
+    populateSelect(viewPick, teachers);
+  }
+
+  renderTimetable();
+}
+function populateSelect(sel, arr){
+  const prev = sel.value;
+  sel.innerHTML = '';
+  arr.forEach(v => { const o=document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  if(prev && arr.includes(prev)) sel.value = prev;
+}
+
+/* ================= Render timetable ================= */
+function renderTimetable(){
+  manageModal.classList.add('hidden');
+  conflictPanel.classList.add('hidden');
+  substitutionPanel.classList.add('hidden');
+  substituteModal.classList.add('hidden');
+  timetableContainer.innerHTML = '';
+  // show school name read-only if in view mode
+  if(viewBy.value === 'edit'){
+    renderEditMode();
+    runFullClashCheck();
+  } else if(viewBy.value === 'grade'){
+    const grade = viewPick.value || grades[0];
+    renderGradeView(grade);
+  } else {
+    const teacher = viewPick.value || teachers[0];
+    renderTeacherView(teacher);
+  }
+}
+
+/* ---- Edit Mode (full table, editable dropdowns) ---- */
+function renderEditMode(){
+  const table = document.createElement('table');
+  const thead = document.createElement('thead');
+  const hrow = document.createElement('tr');
+  ['Time','Grade', ...DAYS].forEach(t => { const th = document.createElement('th'); th.innerHTML = t; hrow.appendChild(th); });
+  thead.appendChild(hrow); table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+
+  SLOTS.forEach((slot, sIdx)=>{
+    if(slot.isBreak){
+      const tr = document.createElement('tr'); tr.className='breakRow';
+      const tcell = document.createElement('td'); tcell.className='timeCell'; tcell.textContent = slot.time;
+      tr.appendChild(tcell);
+      const bc = document.createElement('td'); bc.colSpan = DAYS.length + 1; bc.textContent = slot.name || 'Break';
+      tr.appendChild(bc);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    grades.forEach((grade, gIdx)=>{
+      const tr = document.createElement('tr');
+      if(gIdx === 0){
+        const timeCell = document.createElement('td'); timeCell.className='timeCell'; timeCell.rowSpan = grades.length; timeCell.textContent = slot.time;
+        tr.appendChild(timeCell);
+      }
+      const gradeCell = document.createElement('td'); gradeCell.className = 'gradeCell'; gradeCell.textContent = grade;
+      tr.appendChild(gradeCell);
+
+      DAYS.forEach((day,dIdx)=>{
+        const td = document.createElement('td');
+        const key = keyOf(grade, dIdx, sIdx);
+        const stored = timetable[key] || {subject:'', teacher:''};
+
+        // subject select
+        const subj = document.createElement('select'); subj.className='cellSelect';
+        subj.innerHTML = '<option value="">-- Subject --</option>' + subjects.map(s=>`<option value="${escapeHtml(s)}"${s===stored.subject?' selected':''}>${escapeHtml(s)}</option>`).join('');
+        subj.addEventListener('change', e => {
+          const v = e.target.value;
+          const entry = timetable[key] || {subject:'', teacher:''};
+          entry.subject = v; timetable[key] = entry; scheduleAutosave();
+        });
+
+        // teacher select
+        const teach = document.createElement('select'); teach.className='cellSelect';
+        teach.innerHTML = '<option value="">-- Teacher --</option>' + teachers.map(t=>`<option value="${escapeHtml(t)}"${t===stored.teacher?' selected':''}>${escapeHtml(t)}</option>`).join('');
+        teach.addEventListener('change', e => {
+          const v = e.target.value;
+          const entry = timetable[key] || {subject:'', teacher:''};
+          entry.teacher = v; timetable[key] = entry; scheduleAutosave(); runFullClashCheck();
+        });
+
+        td.appendChild(subj); td.appendChild(document.createElement('br')); td.appendChild(teach);
+        tr.appendChild(td);
+      });
+
+      tbody.appendChild(tr);
+    });
+  });
+
+  table.appendChild(tbody);
+  timetableContainer.appendChild(table);
+}
+
+/* ---- Grade View (read-only single grade) ---- */
+function renderGradeView(grade){
+  // show school header (large, centered)
+  const header = document.createElement('div'); header.style.textAlign='center'; header.style.marginBottom='8px';
+  const sname = schoolNameEl.value || '';
+  const schoolHeader = document.createElement('div'); schoolHeader.style.fontSize='20px'; schoolHeader.style.fontWeight='800'; schoolHeader.textContent = sname || '';
+  const subtitle = document.createElement('div'); subtitle.style.fontSize='14px'; subtitle.style.marginTop='4px'; subtitle.textContent = grade; // just grade name, not repeated label
+  header.appendChild(schoolHeader); header.appendChild(subtitle); timetableContainer.appendChild(header);
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead'); const trh = document.createElement('tr');
+  trh.appendChild(document.createElement('th')).textContent = 'Time';
+  DAYS.forEach(d=> trh.appendChild(document.createElement('th')).textContent = d);
+  thead.appendChild(trh); table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  SLOTS.forEach((slot,sIdx)=>{
+    if(slot.isBreak){
+      const tr = document.createElement('tr'); tr.className='breakRow';
+      tr.appendChild(td(''+slot.time));
+      const bc = td(slot.name || 'Break'); bc.colSpan = DAYS.length; tr.appendChild(bc); tbody.appendChild(tr); return;
+    }
+    const tr = document.createElement('tr'); tr.appendChild(td(slot.time));
+    DAYS.forEach((day,dIdx)=>{
+      const key = keyOf(grade,dIdx,sIdx);
+      const st = timetable[key] || {};
+      const txt = st.subject ? `${st.subject}\n${st.teacher||''}` : '';
+      const cell = td(txt); cell.style.whiteSpace='pre-line'; tr.appendChild(cell);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody); timetableContainer.appendChild(table);
+}
+
+/* ---- Teacher View (read-only single teacher across grades/days) ---- */
+function renderTeacherView(teacher){
+  const header = document.createElement('div'); header.style.textAlign='center'; header.style.marginBottom='8px';
+  const sname = schoolNameEl.value || '';
+  const schoolHeader = document.createElement('div'); schoolHeader.style.fontSize='20px'; schoolHeader.style.fontWeight='800'; schoolHeader.textContent = sname || '';
+  const subtitle = document.createElement('div'); subtitle.style.fontSize='14px'; subtitle.style.marginTop='4px'; subtitle.textContent = teacher;
+  header.appendChild(schoolHeader); header.appendChild(subtitle); timetableContainer.appendChild(header);
+
+  const table = document.createElement('table');
+  const thead = document.createElement('thead'); const trh = document.createElement('tr');
+  trh.appendChild(document.createElement('th')).textContent = 'Time';
+  DAYS.forEach(d=> trh.appendChild(document.createElement('th')).textContent = d);
+  thead.appendChild(trh); table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  SLOTS.forEach((slot,sIdx)=>{
+    if(slot.isBreak){
+      const tr = document.createElement('tr'); tr.className='breakRow';
+      tr.appendChild(td(''+slot.time));
+      const bc = td(slot.name || 'Break'); bc.colSpan = DAYS.length; tr.appendChild(bc);
+      tbody.appendChild(tr); return;
+    }
+    const tr = document.createElement('tr'); tr.appendChild(td(slot.time));
+    DAYS.forEach((day,dIdx)=>{
+      const matches = [];
+      grades.forEach(grade=>{
+        const key = keyOf(grade,dIdx,sIdx);
+        const st = timetable[key];
+        if(st && st.teacher === teacher) matches.push(`${st.subject||''} — ${grade}`);
+      });
+      const cell = td(matches.join('\n')); cell.style.whiteSpace='pre-line'; tr.appendChild(cell);
+    });
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody); timetableContainer.appendChild(table);
+}
+
+/* helper td */
+function td(text){ const c = document.createElement('td'); c.innerHTML = text||''; return c; }
+
+/* ================= Conflict detection ================= */
+function runFullClashCheck(){
+  const conflicts = [];
+  SLOTS.forEach((slot,sIdx)=>{
+    if(slot.isBreak) return;
+    DAYS.forEach((day,dIdx)=>{
+      const map = {};
+      grades.forEach(grade=>{
+        const key = keyOf(grade,dIdx,sIdx);
+        const st = timetable[key];
+        if(st && st.teacher){
+          map[st.teacher] = map[st.teacher] || []; map[st.teacher].push(grade);
+        }
+      });
+      for(const t in map) if(map[t].length>1) conflicts.push(`${t} double-booked on ${DAYS[dIdx]} (${slot.time}): ${map[t].join(', ')}`);
+    });
+  });
+  if(conflicts.length){
+    conflictPanel.classList.remove('hidden');
+    conflictPanel.innerHTML = `<div class="conflicts"><strong>Conflicts:</strong><br>${conflicts.join('<br>')}</div>`;
+  } else {
+    conflictPanel.classList.add('hidden'); conflictPanel.innerHTML = '';
+  }
+}
+
+/* ================= Autosave ================= */
+let autosaveTimer = null;
+function scheduleAutosave(){
+  if(autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(()=> { saveTimetable(); }, 450);
+}
+
+/* ================= Manage modal (add/delete) ================= */
+function openManage(type){
+  manageModal.classList.remove('hidden'); manageModal.innerHTML = `<h3>Manage ${type.charAt(0).toUpperCase()+type.slice(1)}</h3>`;
+  const arr = (type==='grades'?grades:(type==='subjects'?subjects:teachers));
+  const listDiv = document.createElement('div');
+  arr.forEach((it,i)=>{
+    const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.margin='6px 0';
+    const left = document.createElement('div'); left.textContent = it;
+    const del = document.createElement('button'); del.textContent='Delete'; del.style.background='var(--danger)';
+    del.onclick = ()=> {
+      if(!confirm(`Delete "${it}"? This will remove related assignments (if teacher or grade).`)) return;
+      if(type==='grades'){
+        grades.splice(i,1);
+        // remove timetable entries for grade
+        const newT = {};
+        for(const k in timetable) if(!k.startsWith(`${it}||`)) newT[k]=timetable[k];
+        timetable = newT;
+      } else if(type==='subjects'){
+        subjects.splice(i,1); for(const k in timetable) if(timetable[k].subject === it) timetable[k].subject='';
+      } else {
+        teachers.splice(i,1); for(const k in timetable) if(timetable[k].teacher === it) timetable[k].teacher='';
+      }
+      saveLists(); saveTimetable(); openManage(type); renderTopControls();
+    };
+    row.appendChild(left); row.appendChild(del); listDiv.appendChild(row);
+  });
+  manageModal.appendChild(listDiv);
+  const addRow = document.createElement('div'); addRow.style.marginTop='10px';
+  const input = document.createElement('input'); input.type='text'; input.placeholder=`New ${type.slice(0,-1)}`; input.style.marginRight='8px';
+  const addBtn = document.createElement('button'); addBtn.textContent='Add'; addBtn.onclick = ()=>{
+    const v = input.value.trim(); if(!v) return alert('Enter a name');
+    if(type==='grades'){ if(!grades.includes(v)) grades.push(v); }
+    else if(type==='subjects'){ if(!subjects.includes(v)) subjects.push(v); }
+    else { if(!teachers.includes(v)) teachers.push(v); }
+    saveLists(); input.value=''; openManage(type); renderTopControls();
+  };
+  addRow.appendChild(input); addRow.appendChild(addBtn); manageModal.appendChild(addRow);
+  const closeDiv = document.createElement('div'); closeDiv.style.textAlign='right'; closeDiv.style.marginTop='10px';
+  const closeBtn = document.createElement('button'); closeBtn.textContent='Close'; closeBtn.className='ghost';
+  closeBtn.onclick = ()=> manageModal.classList.add('hidden'); closeDiv.appendChild(closeBtn); manageModal.appendChild(closeDiv);
+}
+
+/* ================= Export JSON (edit only) ================= */
+function exportJSON(){
+  if(!schoolNameEl.value.trim()){ alert('Please enter the school name first.'); return; }
+  const payload = { meta:{subjects,teachers,grades,SLOTS,DAYS,school:schoolNameEl.value.trim()}, timetable };
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'timetable_export.json'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ================= Export XLSX (all modes) - exports current view only if not edit) ================= */
+function exportXLSX(){
+  if(!schoolNameEl.value.trim()){ alert('Please enter the school name first.'); return; }
+  const wb = XLSX.utils.book_new();
+  const title = (schoolNameEl.value || 'Timetable').substring(0,60).replace(/[\\\/:*?"<>|]/g,'_');
+
+  if(viewBy.value === 'edit'){
+    // full export: one sheet per grade
+    grades.forEach(grade=>{
+      const aoa = [];
+      aoa.push([schoolNameEl.value || '']);
+      aoa.push([grade]);
+      aoa.push(['Time', ...DAYS]);
+      SLOTS.forEach((slot,sIdx)=>{
+        if(slot.isBreak) { aoa.push([slot.name]); return; }
+        const row = [slot.time];
+        DAYS.forEach((day,dIdx)=>{
+          const key = keyOf(grade,dIdx,sIdx);
+          const st = timetable[key] || {};
+          row.push(`${st.subject||''}${st.teacher ? ' — ' + st.teacher : ''}`);
+        });
+        aoa.push(row);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [{wpx:140}, ...Array(DAYS.length).fill({wpx:130})];
+      XLSX.utils.book_append_sheet(wb, ws, grade.substring(0,31));
+    });
+  } else if(viewBy.value === 'grade'){
+    const grade = viewPick.value || grades[0];
+    const aoa = [];
+    aoa.push([schoolNameEl.value || '']);
+    aoa.push([grade]);
+    aoa.push(['Time', ...DAYS]);
+    SLOTS.forEach((slot,sIdx)=>{
+      if(slot.isBreak){ aoa.push([slot.name]); return; }
+      const row = [slot.time];
+      DAYS.forEach((day,dIdx)=>{
+        const key = keyOf(grade,dIdx,sIdx);
+        const st = timetable[key] || {};
+        row.push(`${st.subject||''}${st.teacher ? ' — ' + st.teacher : ''}`);
+      });
+      aoa.push(row);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wpx:140}, ...Array(DAYS.length).fill({wpx:130})];
+    XLSX.utils.book_append_sheet(wb, ws, (grade||'Grade').substring(0,31));
+  } else {
+    // teacher view: show teacher's timetable across days (cells include subject — grade)
+    const teacher = viewPick.value || teachers[0];
+    const aoa = [];
+    aoa.push([schoolNameEl.value || '']);
+    aoa.push([teacher]);
+    aoa.push(['Time', ...DAYS]);
+    SLOTS.forEach((slot,sIdx)=>{
+      if(slot.isBreak){ aoa.push([slot.name]); return; }
+      const row = [slot.time];
+      DAYS.forEach((day,dIdx)=>{
+        const matches = [];
+        grades.forEach(grade=>{
+          const key = keyOf(grade,dIdx,sIdx);
+          const st = timetable[key];
+          if(st && st.teacher === teacher) matches.push(`${st.subject||''} — ${grade}`);
+        });
+        row.push(matches.join('; '));
+      });
+      aoa.push(row);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{wpx:140}, ...Array(DAYS.length).fill({wpx:130})];
+    XLSX.utils.book_append_sheet(wb, ws, (teacher||'Teacher').substring(0,31));
+  }
+
+  XLSX.writeFile(wb, `${title}_export.xlsx`);
+}
+
+/* ================= Print ================= */
+function printCurrentView(){
+  if(!schoolNameEl.value.trim()){ alert('Please enter the school name first.'); return; }
+  const w = window.open('', '_blank', 'width=1000,height=800');
+  const school = escapeHtml(schoolNameEl.value);
+  let subtitle = '';
+  if(viewBy.value === 'grade'){ subtitle = escapeHtml(viewPick.value || ''); }
+  else if(viewBy.value === 'teacher'){ subtitle = escapeHtml(viewPick.value || ''); }
+
+  const style = `
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;padding:16px}
+      .school{font-size:20px;font-weight:800;text-align:center;margin-bottom:6px}
+      .subtitle{font-size:14px;text-align:center;margin-bottom:10px;color:#333}
+      table{border-collapse:collapse;width:100%}
+      th,td{border:1px solid #222;padding:6px;text-align:center;vertical-align:middle}
+      th{background:#2f80ed;color:#fff}
+      .break{background:#fff2cc;font-weight:700}
+    </style>
+  `;
+  const tableEl = document.querySelector("#timetablePanel table");
+  const content = tableEl ? tableEl.outerHTML : "";
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Print Timetable</title>${style}</head><body>
+    <div class="school">${school}</div>
+    <div class="subtitle">${subtitle}</div>
+    ${content}
+    </body></html>`;
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=> w.print(), 300);
+}
+
+/* ================= Import wrapper ================= */
+function importJSONFile(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    try{
+      const obj = JSON.parse(e.target.result);
+      if(obj.meta && obj.timetable){
+        subjects = obj.meta.subjects || subjects;
+        teachers = obj.meta.teachers || teachers;
+        grades   = obj.meta.grades   || grades;
+        timetable = obj.timetable || timetable;
+        if(obj.meta.school){ schoolNameEl.value = obj.meta.school; saveSchool(); }
+        saveLists(); saveTimetable(); renderTopControls();
+        alert('Import successful');
+      } else alert('Invalid import file');
+    }catch(err){ alert('Import error: '+err.message); }
+  };
+  reader.readAsText(file);
+}
+
+/* ================= Event wiring ================= */
+document.getElementById('btnGrades').addEventListener('click', ()=> openManage('grades'));
+document.getElementById('btnSubjects').addEventListener('click', ()=> openManage('subjects'));
+document.getElementById('btnTeachers').addEventListener('click', ()=> openManage('teachers'));
+
+document.getElementById('btnExportJSON').addEventListener('click', exportJSON);
+document.getElementById('btnExportXLSX').addEventListener('click', exportXLSX);
+
+document.getElementById('btnImport').addEventListener('click', ()=> document.getElementById('fileImport').click());
+document.getElementById('fileImport').addEventListener('change', (ev)=> {
+  const f = ev.target.files[0]; if(!f) return; importJSONFile(f); ev.target.value='';
+});
+
+document.getElementById('btnPrint').addEventListener('click', ()=> printCurrentView());
+document.getElementById('btnClear').addEventListener('click', ()=> {
+  if(confirm('Clear timetable data? This keeps your Subjects/Teachers/Grades lists.')){ timetable = {}; saveTimetable(); renderTopControls(); }
+});
+
+viewBy.addEventListener('change', ()=> renderTopControls());
+viewPick.addEventListener('change', ()=> renderTopControls());
+
+schoolNameEl.addEventListener('input', ()=> saveSchool());
+
+/* ================= small helpers & init ================= */
+function scheduleAutosave(){
+  if(window._autosaveTimer) clearTimeout(window._autosaveTimer);
+  window._autosaveTimer = setTimeout(()=> saveTimetable(), 450);
+}
+
+/* reuse openManage implementation from previous code */
+function openManage(type){
+  manageModal.classList.remove('hidden'); manageModal.innerHTML = `<h3>Manage ${type.charAt(0).toUpperCase()+type.slice(1)}</h3>`;
+  const arr = (type==='grades'?grades:(type==='subjects'?subjects:teachers));
+  const listDiv = document.createElement('div');
+  arr.forEach((it,i)=>{
+    const row = document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.margin='6px 0';
+    const left = document.createElement('div'); left.textContent = it;
+    const del = document.createElement('button'); del.textContent='Delete'; del.style.background='var(--danger)';
+    del.onclick = ()=> {
+      if(!confirm(`Delete "${it}"? This will remove related assignments (if teacher or grade).`)) return;
+      if(type==='grades'){
+        grades.splice(i,1);
+        const newT = {}; for(const k in timetable) if(!k.startsWith(`${it}||`)) newT[k]=timetable[k]; timetable = newT;
+      } else if(type==='subjects'){
+        subjects.splice(i,1); for(const k in timetable) if(timetable[k].subject===it) timetable[k].subject='';
+      } else {
+        teachers.splice(i,1); for(const k in timetable) if(timetable[k].teacher===it) timetable[k].teacher='';
+      }
+      saveLists(); saveTimetable(); openManage(type); renderTopControls();
+    };
+    row.appendChild(left); row.appendChild(del); listDiv.appendChild(row);
+  });
+  manageModal.appendChild(listDiv);
+  const addRow = document.createElement('div'); addRow.style.marginTop='10px';
+  const input = document.createElement('input'); input.type='text'; input.placeholder=`New ${type.slice(0,-1)}`; input.style.marginRight='8px';
+  const addBtn = document.createElement('button'); addBtn.textContent='Add'; addBtn.onclick = ()=>{
+    const v = input.value.trim(); if(!v) return alert('Enter a name');
+    if(type==='grades'){ if(!grades.includes(v)) grades.push(v); }
+    else if(type==='subjects'){ if(!subjects.includes(v)) subjects.push(v); }
+    else { if(!teachers.includes(v)) teachers.push(v); }
+    saveLists(); input.value=''; openManage(type); renderTopControls();
+  };
+  addRow.appendChild(input); addRow.appendChild(addBtn); manageModal.appendChild(addRow);
+  const closeDiv = document.createElement('div'); closeDiv.style.textAlign='right'; closeDiv.style.marginTop='10px';
+  const closeBtn = document.createElement('button'); closeBtn.textContent='Close'; closeBtn.className='ghost';
+  closeBtn.onclick = ()=> manageModal.classList.add('hidden');
+  closeDiv.appendChild(closeBtn); manageModal.appendChild(closeDiv);
+}
+
+/* ================= Substitution Feature (updated to include grade) ================= */
+/* Session-only substitution assignments:
+   - User opens Substitution panel -> choose Day
+   - Add absent teacher(s) (one after another) to the day's absent list
+   - For each absent teacher, click 'Assign' to open slot-by-slot assign UI
+   - System shows the Grade(s) where the absent teacher was scheduled at that slot
+   - For each affected Grade, user can choose a substitute (this saves grade info)
+   - System excludes busy teachers (teaching at that slot) and already-assigned substitutes
+   - Save assignments; they are temporary for the session and printable
+*/
+
+let substitutions = []; // entries: { day, slot, absent, substitute, grade }
+let absentsForDay = []; // list of absent teacher names for currently selected day (reset when panel closed)
+
+function openSubstitutionPanel(){
+  const panel = document.getElementById('substitutionPanel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<h3>Substitution (temporary session)</h3>';
+
+  // Day selector
+  const dayRow = document.createElement('div'); dayRow.className='sub-row';
+  const dayLabel = document.createElement('div'); dayLabel.textContent = 'Select Day:';
+  const daySel = document.createElement('select');
+  DAYS.forEach((d,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=d; daySel.appendChild(o); });
+  dayRow.appendChild(dayLabel); dayRow.appendChild(daySel);
+  panel.appendChild(dayRow);
+
+  // Absent teacher add
+  const absentRow = document.createElement('div'); absentRow.className='sub-row'; absentRow.style.marginTop='8px';
+  const absentLabel = document.createElement('div'); absentLabel.textContent = 'Absent Teacher:';
+  const absentSel = document.createElement('select');
+  const emptyOpt = document.createElement('option'); emptyOpt.value=''; emptyOpt.textContent='-- select teacher --'; absentSel.appendChild(emptyOpt);
+  teachers.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; absentSel.appendChild(o); });
+  const addAbsentBtn = document.createElement('button'); addAbsentBtn.textContent='Add Absent';
+  absentRow.appendChild(absentLabel); absentRow.appendChild(absentSel); absentRow.appendChild(addAbsentBtn);
+  panel.appendChild(absentRow);
+
+  // Absent list container
+  const listDiv = document.createElement('div'); listDiv.id='absentListDiv'; listDiv.style.marginTop='10px';
+  panel.appendChild(listDiv);
+
+  // Assigned substitutions view
+  const subsView = document.createElement('div'); subsView.id='subsAssignedDiv'; subsView.style.marginTop='10px';
+  panel.appendChild(subsView);
+
+  // Controls: Print & Clear & Close
+  const ctlRow = document.createElement('div'); ctlRow.style.marginTop='12px'; ctlRow.style.textAlign='right';
+  const printBtn = document.createElement('button'); printBtn.textContent='Print Substitution Sheet';
+  const clearBtn = document.createElement('button'); clearBtn.textContent='Clear Substitutions'; clearBtn.style.marginLeft='8px';
+  const closeBtn = document.createElement('button'); closeBtn.textContent='Close'; closeBtn.className='ghost'; closeBtn.style.marginLeft='8px';
+  ctlRow.appendChild(printBtn); ctlRow.appendChild(clearBtn); ctlRow.appendChild(closeBtn);
+  panel.appendChild(ctlRow);
+
+  // initialize absents for the day
+  absentsForDay = [];
+  substitutions = []; // session fresh when opened (user requested fresh each day)
+  renderAbsentList(listDiv, daySel.value, subsView);
+
+  // events
+  daySel.addEventListener('change', ()=> {
+    absentsForDay = []; substitutions = [];
+    renderAbsentList(listDiv, daySel.value, subsView);
+  });
+
+  addAbsentBtn.addEventListener('click', ()=>{
+    const t = absentSel.value;
+    if(!t){ alert('Select a teacher to mark absent'); return; }
+    if(absentsForDay.includes(t)){ alert(t + ' already marked absent'); return; }
+    absentsForDay.push(t);
+    renderAbsentList(listDiv, daySel.value, subsView);
+  });
+
+  printBtn.addEventListener('click', ()=> {
+    if(substitutions.length === 0){ alert('No substitutions assigned'); return; }
+    printSubstitutionSheet();
+  });
+
+  clearBtn.addEventListener('click', ()=> {
+    if(!confirm('Clear all substitution assignments for this session?')) return;
+    substitutions = []; absentsForDay = []; renderAbsentList(listDiv, daySel.value, subsView);
+  });
+
+  closeBtn.addEventListener('click', ()=> {
+    panel.classList.add('hidden'); substitutions = []; absentsForDay = [];
+    renderTopControls();
+  });
+}
+
+// render absent list & provide Assign button per absent teacher
+function renderAbsentList(container, dayIdx, subsView){
+  container.innerHTML = '';
+  const dayTitle = document.createElement('div'); dayTitle.className='small-muted'; dayTitle.textContent = 'Day: ' + DAYS[dayIdx];
+  container.appendChild(dayTitle);
+
+  if(absentsForDay.length === 0){
+    const p = document.createElement('div'); p.className='small-muted'; p.style.marginTop='8px'; p.textContent = 'No absent teachers added yet.';
+    container.appendChild(p);
+  } else {
+    absentsForDay.forEach((t,i)=>{
+      const row = document.createElement('div'); row.className='sub-row';
+      const nameDiv = document.createElement('div'); nameDiv.textContent = t;
+      const assignBtn = document.createElement('button'); assignBtn.textContent = 'Assign Substitutes';
+      const removeBtn = document.createElement('button'); removeBtn.textContent = 'Remove'; removeBtn.style.marginLeft='8px'; removeBtn.style.background='var(--danger)';
+      row.appendChild(nameDiv); row.appendChild(assignBtn); row.appendChild(removeBtn);
+      container.appendChild(row);
+
+      assignBtn.addEventListener('click', ()=> openAssignPanel(parseInt(dayIdx), t, subsView));
+      removeBtn.addEventListener('click', ()=> {
+        if(!confirm(`Remove ${t} from absent list?`)) return;
+        // also remove any existing substitutions for this absent teacher
+        substitutions = substitutions.filter(s=> !(s.day==dayIdx && s.absent===t) );
+        absentsForDay.splice(i,1);
+        renderAbsentList(container, dayIdx, subsView);
+        renderAssignedSubs(subsView);
+      });
+    });
+  }
+  renderAssignedSubs(subsView);
+}
+
+// open assign UI for one absent teacher (slot-by-slot dropdowns), now showing Grade(s)
+function openAssignPanel(dayIdx, absentTeacher, subsView){
+  // modal within substituteModal for convenience
+  substituteModal.classList.remove('hidden');
+  substituteModal.innerHTML = `<h3>Assign substitutes for ${absentTeacher} (${DAYS[dayIdx]})</h3>`;
+  const info = document.createElement('div'); info.className='small-muted'; info.textContent = 'Choose substitute for each slot & grade where the teacher is scheduled. Existing timetable and previously assigned substitutes are excluded.';
+  substituteModal.appendChild(info);
+
+  const table = document.createElement('table'); table.style.marginTop='10px';
+  const thead = document.createElement('thead'); const hr = document.createElement('tr');
+  ['Time','Grade','Subject','Available Substitutes','Assigned'].forEach(t=>{ const th=document.createElement('th'); th.textContent=t; hr.appendChild(th); });
+  thead.appendChild(hr); table.appendChild(thead);
+  const tbody = document.createElement('tbody');
+
+  SLOTS.forEach((slot,sIdx)=>{
+    if(slot.isBreak){
+      const tr = document.createElement('tr'); tr.className='breakRow';
+      const tcell = document.createElement('td'); tcell.textContent = slot.time; tr.appendChild(tcell);
+      const bc = document.createElement('td'); bc.colSpan = 4; bc.textContent = slot.name || 'Break'; tr.appendChild(bc);
+      tbody.appendChild(tr); return;
+    }
+
+    // find which grade(s) this absent teacher is scheduled to teach at this day+slot
+    const affectedGrades = grades.filter(g => {
+      const st = timetable[keyOf(g, dayIdx, sIdx)];
+      return st && st.teacher === absentTeacher;
+    });
+
+    if(affectedGrades.length === 0){
+      // show single row saying not scheduled for this slot
+      const tr = document.createElement('tr');
+      tr.appendChild(td(slot.time));
+      const notScheduledTd = document.createElement('td'); notScheduledTd.colSpan = 4; notScheduledTd.textContent = 'Absent teacher not scheduled for any grade this slot.';
+      tr.appendChild(notScheduledTd);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    // If multiple grades, make first time cell span rows to be tidy
+    affectedGrades.forEach((gradeName, idxGrade)=>{
+      const tr = document.createElement('tr');
+      if(idxGrade === 0){
+        const timeCell = document.createElement('td'); timeCell.rowSpan = affectedGrades.length; timeCell.textContent = slot.time;
+        tr.appendChild(timeCell);
+      }
+      // Grade cell
+      const gcell = document.createElement('td'); gcell.textContent = gradeName; tr.appendChild(gcell);
+
+      // Subject cell (what subject was assigned)
+      const st = timetable[keyOf(gradeName, dayIdx, sIdx)] || {};
+      const subjCell = document.createElement('td'); subjCell.textContent = st.subject || ''; tr.appendChild(subjCell);
+
+      // compute busy teachers for this slot: those assigned in timetable + substitutes already assigned for this slot
+      const busy = new Set();
+      grades.forEach(g=>{
+        const sRec = timetable[keyOf(g, dayIdx, sIdx)];
+        if(sRec && sRec.teacher) busy.add(sRec.teacher);
+      });
+      // also exclude absent teachers themselves (they obviously cannot substitute)
+      absentsForDay.forEach(a=> busy.add(a));
+      // exclude substitutes already chosen for this slot (any grade)
+      substitutions.forEach(s=> { if(s.day==dayIdx && s.slot==sIdx) busy.add(s.substitute); });
+
+      const avail = teachers.filter(t=> !busy.has(t) );
+      const tdAvail = document.createElement('td');
+      const sel = document.createElement('select');
+      const optEmpty = document.createElement('option'); optEmpty.value=''; optEmpty.textContent='-- none --'; sel.appendChild(optEmpty);
+      avail.forEach(a=> { const o=document.createElement('option'); o.value=a; o.textContent=a; sel.appendChild(o); });
+
+      // if a substitution already stored for this absentTeacher at this slot+grade, show it selected
+      const existing = substitutions.find(s=> s.day==dayIdx && s.slot==sIdx && s.absent===absentTeacher && s.grade===gradeName);
+      if(existing){
+        sel.value = existing.substitute;
+      }
+
+      tdAvail.appendChild(sel);
+      tr.appendChild(tdAvail);
+
+      const tdAssigned = document.createElement('td');
+      const saveBtn = document.createElement('button'); saveBtn.textContent='Save';
+      saveBtn.addEventListener('click', ()=>{
+        const chosen = sel.value;
+        // remove previous for this slot+absent+grade
+        substitutions = substitutions.filter(s=> !(s.day==dayIdx && s.slot==sIdx && s.absent===absentTeacher && s.grade===gradeName) );
+        if(chosen){
+          // ensure chosen is still available (not double assigned by race)
+          // re-compute busy
+          const busyNow = new Set();
+          grades.forEach(g=>{
+            const sRec = timetable[keyOf(g, dayIdx, sIdx)];
+            if(sRec && sRec.teacher) busyNow.add(sRec.teacher);
+          });
+          absentsForDay.forEach(a=> busyNow.add(a));
+          substitutions.forEach(s=>{ if(s.day==dayIdx && s.slot==sIdx) busyNow.add(s.substitute); });
+          if(busyNow.has(chosen)){ alert(chosen + ' is no longer available for this slot'); return; }
+          substitutions.push({ day: dayIdx, slot: sIdx, absent: absentTeacher, substitute: chosen, grade: gradeName });
+        }
+        renderAssignedSubs(subsView);
+        // refresh this assign panel to update availability lists
+        openAssignPanel(dayIdx, absentTeacher, subsView);
+      });
+      tdAssigned.appendChild(saveBtn);
+      tr.appendChild(tdAssigned);
+
+      tbody.appendChild(tr);
+    });
+  });
+
+  table.appendChild(tbody);
+  substituteModal.appendChild(table);
+
+  const closeDiv = document.createElement('div'); closeDiv.style.textAlign='right'; closeDiv.style.marginTop='10px';
+  const closeBtn = document.createElement('button'); closeBtn.textContent='Close'; closeBtn.className='ghost';
+  closeBtn.onclick = ()=> { substituteModal.classList.add('hidden'); renderAssignedSubs(subsView); };
+  closeDiv.appendChild(closeBtn); substituteModal.appendChild(closeDiv);
+}
+
+// display currently assigned substitutions (now includes grade)
+function renderAssignedSubs(container){
+  container.innerHTML = '<h4>Assigned Substitutions (session)</h4>';
+  if(substitutions.length === 0){
+    const p=document.createElement('div'); p.className='small-muted'; p.textContent='No assignments yet.';
+    container.appendChild(p); return;
+  }
+  // group by day then sort slots
+  const byDay = {};
+  substitutions.forEach(s=>{
+    byDay[s.day] = byDay[s.day] || [];
+    byDay[s.day].push(s);
+  });
+  Object.keys(byDay).sort((a,b)=>a-b).forEach(dayKey=>{
+    const hdr = document.createElement('div'); hdr.style.marginTop='8px'; hdr.style.fontWeight='700'; hdr.textContent = DAYS[dayKey];
+    container.appendChild(hdr);
+    const tbl = document.createElement('table'); tbl.style.marginTop='6px';
+    const thead = document.createElement('thead'); const rh = document.createElement('tr');
+    ['Time','Grade','Absent','Substitute','Action'].forEach(t=>{
+      const th = document.createElement('th'); th.textContent = t; rh.appendChild(th);
+    }); thead.appendChild(rh); tbl.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    byDay[dayKey].sort((a,b)=>a.slot-b.slot).forEach(s=>{
+      const tr = document.createElement('tr');
+      tr.appendChild(td(SLOTS[s.slot].time));
+      tr.appendChild(td(s.grade || ''));
+      tr.appendChild(td(s.absent));
+      tr.appendChild(td(s.substitute));
+      const act = document.createElement('td');
+      const del = document.createElement('button'); del.textContent='Remove';
+      del.style.background='var(--danger)';
+      del.addEventListener('click', ()=> {
+        substitutions = substitutions.filter(x=> !(x.day==s.day && x.slot==s.slot && x.absent===s.absent && x.substitute===s.substitute && x.grade===s.grade));
+        renderAssignedSubs(container);
+      });
+      act.appendChild(del); tr.appendChild(act);
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    container.appendChild(tbl);
+  });
+}
+
+// Printable substitution sheet (now includes Grade)
+function printSubstitutionSheet(){
+  // generate grouped view by day & slot
+  const grouped = {};
+  substitutions.forEach(s=>{
+    grouped[s.day] = grouped[s.day] || {};
+    grouped[s.day][s.slot] = grouped[s.day][s.slot] || [];
+    grouped[s.day][s.slot].push(s);
+  });
+
+  let html = `<html><head><meta charset="utf-8"><title>Substitution Sheet</title>
+    <style>body{font-family:Arial,Helvetica,sans-serif;padding:14px} h2{text-align:center} table{width:100%;border-collapse:collapse} th,td{border:1px solid #222;padding:6px;text-align:left}</style>
+    </head><body>`;
+  html += `<div style="text-align:center;font-weight:800;font-size:18px">${escapeHtml(schoolNameEl.value||'')}</div>`;
+  html += `<h2 style="text-align:center">Substitution Sheet</h2>`;
+
+  Object.keys(grouped).sort((a,b)=>a-b).forEach(dk=>{
+    html += `<h3 style="margin-bottom:6px">${DAYS[dk]}</h3>`;
+    html += `<table><thead><tr><th>Time</th><th>Grade</th><th>Absent Teacher</th><th>Substitute</th></tr></thead><tbody>`;
+    Object.keys(grouped[dk]).sort((a,b)=>a-b).forEach(slotIdx=>{
+      const arr = grouped[dk][slotIdx];
+      arr.forEach(item=>{
+        html += `<tr><td>${SLOTS[slotIdx].time}</td><td>${escapeHtml(item.grade||'')}</td><td>${escapeHtml(item.absent)}</td><td>${escapeHtml(item.substitute)}</td></tr>`;
+      });
+    });
+    html += `</tbody></table>`;
+  });
+
+  html += `</body></html>`;
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=> w.print(), 300);
+}
+
+/* ================= Wire Substitution button ================= */
+document.getElementById('btnSubstitution').addEventListener('click', openSubstitutionPanel);
+
+/* ================= ready ================= */
+renderTopControls();
+
+</script>
+</body>
+</html>

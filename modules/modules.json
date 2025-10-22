@@ -1,0 +1,5 @@
+[
+  { "code": "timetable", "name": "Time-Table Maker", "active": true },
+  { "code": "progress", "name": "Progress Report Maker", "active": true },
+  { "code": "payslip", "name": "Pay-Slip Maker", "active": true }
+]

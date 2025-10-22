@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Student Progress Report — Final (v3)</title>
+
+<!-- SheetJS and Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.3.0/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --accent:#2563eb; --bg:#f5f7fb; --card:#fff; --muted:#6b7280; --danger:#e11d48; --ok:#16a34a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:Inter,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:#111827}
+  header{background:linear-gradient(90deg,var(--accent),#60a5fa); color:#fff; padding:14px 16px}
+  header .top{max-width:1200px;margin:0 auto;display:flex;align-items:center;gap:12px}
+  header h1{margin:0; font-size:18px; font-weight:700}
+  header .schoolLabel{margin-left:auto;font-weight:700}
+  .container{max-width:1200px; margin:12px auto; padding:14px}
+  .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px}
+  .tabs{display:flex; gap:6px; flex-wrap:wrap}
+  .tab{background:#fff; color:#111827; border:1px solid #e5e7eb; padding:8px 10px; border-radius:8px; cursor:pointer}
+  .tab.active{background:var(--accent); color:#fff; border-color:transparent}
+  .grow{flex:1}
+  button, select, input[type="text"], input[type="number"], input[type="date"]{padding:8px 10px; border-radius:8px; border:1px solid #e5e7eb; background:#fff}
+  button{background:var(--accent); color:#fff; border-color:transparent; cursor:pointer}
+  button.ghost{background:#fff; color:var(--accent); border:1px solid var(--accent)}
+  button.danger{background:var(--danger)}
+  .panel{background:var(--card); border:1px solid #e5e7eb; border-radius:12px; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,0.04); margin-bottom:12px}
+  .grid{display:grid; gap:10px}
+  .grid.cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}
+  .grid.cols-3{grid-template-columns:repeat(3, minmax(0, 1fr))}
+  .grid.cols-4{grid-template-columns:repeat(4, minmax(0, 1fr))}
+  .sectionTitle{font-weight:700; margin:6px 0 10px; color:#0b3d91}
+  table{width:100%; border-collapse:collapse; background:#fff}
+  th,td{border:1px solid #e5e7eb; padding:8px; text-align:center; font-size:13px}
+  thead th{background:#eef2ff}
+  .muted{color:var(--muted); font-size:12px}
+  .success{color:var(--ok)}
+  .hidden{display:none}
+  .listRow{display:flex; justify-content:space-between; align-items:center; border:1px solid #e5e7eb; border-radius:10px; padding:8px; margin:6px 0; background:#fff}
+  .chip{display:inline-flex; align-items:center; gap:6px; padding:4px 8px; border-radius:999px; background:#eef2ff; font-size:12px}
+  .divider{height:1px; background:#e5e7eb; margin:10px 0}
+  .controlsRow{display:flex; gap:8px; align-items:center}
+  .canvas-wrap{width:100%;height:420px}
+  .delBtn{ background: var(--danger) !important; color:#fff !important; border:0 !important; padding:6px 10px; border-radius:8px; cursor:pointer }
+  .chart-actions{display:flex; gap:8px; align-items:center; margin-top:8px}
+  @media(max-width:900px){ .grid.cols-3, .grid.cols-4{grid-template-columns:1fr 1fr} }
+  @media(max-width:640px){ .grid.cols-2, .grid.cols-3, .grid.cols-4{grid-template-columns:1fr} .controlsRow{flex-direction:column;align-items:stretch} }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>Student Progress Report</h1>
+    <div class="grow"></div>
+    <button id="btnImportExcel" class="ghost">Import (Choose file)</button>
+    <input id="fileExcel" type="file" accept=".xlsx,.xls" style="display:none" />
+    <button id="btnExportExcel" class="ghost">Download</button>
+    <button id="btnClearAll" style="background:var(--danger); color:#fff; border:0; padding:8px 10px; border-radius:8px">Clear</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="toolbar">
+    <div class="tabs" role="tablist">
+      <div class="tab active" data-tab="masters">1) Master Data</div>
+      <div class="tab" data-tab="marks">2) Marks Entry</div>
+      <div class="tab" data-tab="views">3) View Reports</div>
+    </div>
+  </div>
+
+  <!-- MASTERS -->
+  <section id="tab_masters" class="panel">
+    <div class="sectionTitle">Master Data Entry</div>
+    <div class="divider"></div>
+
+    <!-- Row 1: School name -->
+    <div style="margin-bottom:12px">
+      <label style="font-weight:600">School Name</label>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+        <input id="schoolInput" type="text" placeholder="Enter school name" style="min-width:320px" />
+        <button id="btnSaveSchool" class="ghost">Save</button>
+      </div>
+    </div>
+
+    <!-- Row 2: Grades | Sections | Teachers -->
+    <div class="grid cols-3" style="margin-top:6px">
+      <div>
+        <h4>Grades</h4>
+        <div id="gradeList" style="margin-top:10px"></div>
+        <div class="grid cols-2" style="margin-top:8px">
+          <input id="gradeNew" type="text" placeholder="New Grade (e.g., Grade 8)" />
+          <button id="btnAddGrade">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <h4>Sections</h4>
+        <div id="sectionList" style="margin-top:10px"></div>
+        <div class="grid cols-2" style="margin-top:8px">
+          <input id="sectionNew" type="text" placeholder="New Section (e.g., A)" />
+          <button id="btnAddSection">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <h4>Teachers</h4>
+        <div id="teacherList" style="margin-top:10px"></div>
+        <div style="margin-top:8px" class="controlsRow">
+          <input id="teacherNew" type="text" placeholder="Teacher name" />
+          <button id="btnAddTeacher">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 3: Exam Types | Subjects | Students -->
+    <div class="grid cols-3" style="margin-top:12px">
+      <div>
+        <h4>Exam Types</h4>
+        <div id="examTypeList" style="margin-top:10px"></div>
+        <div style="margin-top:8px" class="controlsRow">
+          <input id="examNew" type="text" placeholder="Exam (UT-1)" />
+          <button id="btnAddExam">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <h4>Subjects</h4>
+        <div id="subjectList" style="margin-top:10px"></div>
+        <div style="margin-top:8px" class="controlsRow">
+          <input id="subjectNew" type="text" placeholder="Subject (Math)" />
+          <button id="btnAddSubject">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <h4>Students</h4>
+        <div style="margin-top:8px" class="controlsRow">
+          <select id="studentGradeSelect"></select>
+          <select id="studentSectionSelect"></select>
+        </div>
+        <div style="margin-top:8px" class="controlsRow">
+          <input id="studentNameNew" type="text" placeholder="Student name" />
+          <button id="btnAddStudent">Add</button>
+        </div>
+        <div id="studentList" style="margin-top:10px"></div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- MARKS ENTRY -->
+  <section id="tab_marks" class="panel hidden">
+    <div class="sectionTitle">Marks Entry</div>
+
+    <div class="grid cols-4">
+      <select id="selExamType"></select>
+      <input id="inpMaxMarks" type="number" min="1" placeholder="Maximum Marks" />
+      <select id="selSubject"></select>
+      <div></div>
+      <select id="selGrade"></select>
+      <select id="selSection"></select>
+      <input id="inpExamDate" type="date" />
+      <button id="btnLoadGrid">Marks Entry</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div id="marksGrid"></div>
+
+    <div style="margin-top:10px">
+      <button id="btnSaveMarks" class="ghost hidden">Save</button>
+      <span id="saveStatus" class="muted"></span>
+    </div>
+  </section>
+
+  <!-- VIEWS -->
+  <section id="tab_views" class="panel hidden">
+    <div class="sectionTitle">View Reports</div>
+
+    <div class="controlsRow" style="margin-bottom:8px">
+      <label style="font-weight:600">Select view:</label>
+      <select id="viewSelect">
+        <option value="student">Student-wise</option>
+        <option value="grade">Grade-wise</option>
+        <option value="progress">Student Progressive</option>
+      </select>
+      <div class="grow"></div>
+    </div>
+
+    <div id="viewStudentPanel" class="hidden">
+      <div class="grid cols-2">
+        <select id="vwStudentGrade"></select>
+        <select id="vwStudentSection"></select>
+      </div>
+      <select id="vwStudent" style="margin-top:8px"></select>
+      <div style="margin-top:8px">
+        <button id="btnShowStudent">Show</button>
+        <button id="btnPrintStudent" class="ghost" style="margin-left:8px">Print</button>
+      </div>
+      <div id="viewStudentWise" style="margin-top:8px"></div>
+    </div>
+
+    <div id="viewGradePanel" class="hidden">
+      <div class="grid cols-2">
+        <select id="vwGrade"></select>
+        <select id="vwSection"></select>
+      </div>
+      <select id="vwExamType" style="margin-top:8px"></select>
+      <div style="margin-top:8px">
+        <button id="btnShowGrade">Show</button>
+        <button id="btnPrintGrade" class="ghost" style="margin-left:8px">Print</button>
+      </div>
+      <div id="viewGradeWise" style="margin-top:8px"></div>
+    </div>
+
+    <div id="viewProgressPanel" class="hidden">
+      <div class="grid cols-2">
+        <select id="vwProgGrade"></select>
+        <select id="vwProgSection"></select>
+      </div>
+      <select id="vwProgStudent" style="margin-top:8px"></select>
+      <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+        <label style="font-weight:600">Chart type</label>
+        <select id="chartTypeSelect"><option value="bar">Bar</option><option value="line">Line</option></select>
+        <button id="btnShowProgress">Show</button>
+      </div>
+
+      <div class="canvas-wrap" style="margin-top:12px"><canvas id="progressChart"></canvas></div>
+      <div class="chart-actions">
+        <button id="btnDownloadChart" class="ghost">Download Chart Image</button>
+        <div id="viewStudentProgress" style="margin-left:8px"></div>
+      </div>
+    </div>
+
+  </section>
+</div>
+
+<script>
+/* ---------- Storage and defaults ---------- */
+const STORAGE = { workbook: 'spr_workbook_v1', school: 'spr_school_v1' };
+const DEF_GRADES = ['Grade 6','Grade 7','Grade 8','Grade 9','Grade 10'];
+const DEF_SECTIONS = ['A','B'];
+const DEF_SUBJECTS = ['Math','English','Science','Hindi','Social Science'];
+const DEF_EXAMS = ['UT-1','UT-2','Half-Yearly','UT-3','Annual'];
+const DEF_TEACHERS = ['Mr. Sharma','Ms. Gupta','Mr. Khan'];
+
+/* ---------- Workbook helpers ---------- */
+function ensureWorkbook(){
+  let raw = localStorage.getItem(STORAGE.workbook);
+  if(!raw){
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([DEF_GRADES]), 'Grades');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([DEF_SECTIONS]), 'Sections');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([DEF_TEACHERS]), 'Teachers');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([DEF_EXAMS]), 'ExamTypes');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([DEF_SUBJECTS]), 'Subjects');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([]), 'Students');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([]), 'Marks');
+    const b64 = XLSX.write(wb,{bookType:'xlsx',type:'base64'});
+    localStorage.setItem(STORAGE.workbook, b64);
+    return wb;
+  }
+  try {
+    return XLSX.read(raw, { type:'base64' });
+  } catch(e){
+    console.error('Workbook read failed, reinitializing', e);
+    localStorage.removeItem(STORAGE.workbook);
+    return ensureWorkbook();
+  }
+}
+
+function saveWorkbook(wb){
+  const b64 = XLSX.write(wb,{bookType:'xlsx',type:'base64'});
+  localStorage.setItem(STORAGE.workbook, b64);
+}
+
+function readList(wb, name){
+  const sh = wb.Sheets[name];
+  if(!sh) return [];
+  const rows = XLSX.utils.sheet_to_json(sh, { header:1 }) || [];
+  return (rows[0]||[]).filter(Boolean).map(String);
+}
+
+function readStudents(wb){
+  const sh = wb.Sheets['Students'];
+  if(!sh) return [];
+  const arr = XLSX.utils.sheet_to_json(sh) || [];
+  return arr.map(r=> ({ id: String(r.id || r.studentId || Math.random().toString(36).slice(2,9)), name: String(r.name || r.student || '').trim(), grade: String(r.grade||''), section: String(r.section||'') })).filter(s=> s.name);
+}
+
+function readMarksPlain(wb){
+  const sh = wb.Sheets['Marks'];
+  if(!sh) return [];
+  const arr = XLSX.utils.sheet_to_json(sh) || [];
+  return arr;
+}
+
+function writeList(wb,name,arr){
+  wb.Sheets[name] = XLSX.utils.aoa_to_sheet([arr]);
+}
+
+function writeStudents(wb, students){
+  const rows = students.map(s=> ({ id: s.id, name: s.name, grade: s.grade, section: s.section }));
+  wb.Sheets['Students'] = XLSX.utils.json_to_sheet(rows);
+}
+
+function writeMarks(wb, marksArray){
+  wb.Sheets['Marks'] = XLSX.utils.json_to_sheet(marksArray);
+}
+
+/* ---------- DOM helpers ---------- */
+function fillOptions(sel, arr, withEmpty=false){
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = (withEmpty ? '<option value=""></option>' : '') + arr.map(x=> `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  if(arr.includes(cur)) sel.value = cur;
+}
+function escapeHtml(s){ return String(s||''); }
+
+/* ---------- Render Masters UI (with delete buttons) ---------- */
+function renderMasters(){
+  const wb = ensureWorkbook();
+  const grades = readList(wb, 'Grades');
+  const sections = readList(wb, 'Sections');
+  const teachers = readList(wb, 'Teachers');
+  const examTypes = readList(wb, 'ExamTypes');
+  const subjects = readList(wb, 'Subjects');
+  const students = readStudents(wb);
+
+  const gradeList = document.getElementById('gradeList');
+  gradeList.innerHTML = grades.length ? grades.map(g=> `<div class="listRow"><div>${escapeHtml(g)}</div><button class="delBtn" data-action="del-grade" data-value="${escapeHtml(g)}">Delete</button></div>`).join('') : '<div class="muted">No grades</div>';
+
+  const sectionList = document.getElementById('sectionList');
+  sectionList.innerHTML = sections.length ? sections.map(s=> `<div class="listRow"><div>${escapeHtml(s)}</div><button class="delBtn" data-action="del-section" data-value="${escapeHtml(s)}">Delete</button></div>`).join('') : '<div class="muted">No sections</div>';
+
+  const teacherList = document.getElementById('teacherList');
+  teacherList.innerHTML = teachers.length ? teachers.map(t=> `<div class="listRow"><div>${escapeHtml(t)}</div><button class="delBtn" data-action="del-teacher" data-value="${escapeHtml(t)}">Delete</button></div>`).join('') : '<div class="muted">No teachers</div>';
+
+  const examList = document.getElementById('examTypeList');
+  examList.innerHTML = examTypes.length ? examTypes.map(e=> `<div class="listRow"><div>${escapeHtml(e)}</div><button class="delBtn" data-action="del-exam" data-value="${escapeHtml(e)}">Delete</button></div>`).join('') : '<div class="muted">No exams</div>';
+
+  const subjectList = document.getElementById('subjectList');
+  subjectList.innerHTML = subjects.length ? subjects.map(s=> `<div class="listRow"><div>${escapeHtml(s)}</div><button class="delBtn" data-action="del-subject" data-value="${escapeHtml(s)}">Delete</button></div>`).join('') : '<div class="muted">No subjects</div>';
+
+  const studentList = document.getElementById('studentList');
+  studentList.innerHTML = students.length ? students.map(st=> `<div class="listRow"><div>${escapeHtml(st.name)} <span class="chip">${escapeHtml(st.grade)}-${escapeHtml(st.section)}</span></div><button class="delBtn" data-action="del-student" data-value="${escapeHtml(st.id)}">Delete</button></div>`).join('') : '<div class="muted">No students</div>';
+
+  document.querySelectorAll('.delBtn').forEach(btn=>{
+    btn.onclick = ()=> {
+      const action = btn.getAttribute('data-action');
+      const value = btn.getAttribute('data-value');
+      if(action === 'del-grade') deleteGrade(value);
+      if(action === 'del-section') deleteSection(value);
+      if(action === 'del-teacher') deleteTeacher(value);
+      if(action === 'del-exam') deleteExamType(value);
+      if(action === 'del-subject') deleteSubject(value);
+      if(action === 'del-student') deleteStudent(value);
+    };
+  });
+
+  // fill selects
+  fillOptions(document.getElementById('studentGradeSelect'), grades);
+  fillOptions(document.getElementById('studentSectionSelect'), sections);
+  fillOptions(document.getElementById('selGrade'), grades);
+  fillOptions(document.getElementById('selSection'), sections);
+  fillOptions(document.getElementById('selExamType'), examTypes);
+  fillOptions(document.getElementById('selSubject'), subjects);
+
+  // view selectors
+  fillOptions(document.getElementById('vwStudentGrade'), grades);
+  fillOptions(document.getElementById('vwStudentSection'), sections);
+  fillOptions(document.getElementById('vwProgGrade'), grades);
+  fillOptions(document.getElementById('vwProgSection'), sections);
+  fillOptions(document.getElementById('vwGrade'), grades);
+  fillOptions(document.getElementById('vwSection'), sections);
+  fillOptions(document.getElementById('vwExamType'), examTypes);
+
+  // populate student pickers
+  fillOptions(document.getElementById('vwStudent'), students.map(s=> s.name), true);
+  fillOptions(document.getElementById('vwProgStudent'), students.map(s=> s.name), true);
+}
+
+/* ---------- Add / Delete master operations ---------- */
+function addGrade(){ const v=document.getElementById('gradeNew').value.trim(); if(!v) return alert('Enter grade'); const wb=ensureWorkbook(); const arr=readList(wb,'Grades'); if(!arr.includes(v)) arr.push(v); writeList(wb,'Grades',arr); saveWorkbook(wb); document.getElementById('gradeNew').value=''; renderMasters(); }
+function deleteGrade(name){ if(!confirm('Delete grade '+name+'?')) return; const wb=ensureWorkbook(); let arr=readList(wb,'Grades'); arr = arr.filter(x=> x!==name); writeList(wb,'Grades',arr); let students = readStudents(wb).filter(s=> s.grade !== name); writeStudents(wb, students); saveWorkbook(wb); renderMasters(); }
+
+function addSection(){ const v=document.getElementById('sectionNew').value.trim(); if(!v) return alert('Enter section'); const wb=ensureWorkbook(); const arr=readList(wb,'Sections'); if(!arr.includes(v)) arr.push(v); writeList(wb,'Sections',arr); saveWorkbook(wb); document.getElementById('sectionNew').value=''; renderMasters(); }
+function deleteSection(name){ if(!confirm('Delete section '+name+'?')) return; const wb=ensureWorkbook(); let arr=readList(wb,'Sections'); arr = arr.filter(x=> x!==name); writeList(wb,'Sections',arr); let students = readStudents(wb).filter(s=> s.section !== name); writeStudents(wb, students); saveWorkbook(wb); renderMasters(); }
+
+function addTeacher(){ const v=document.getElementById('teacherNew').value.trim(); if(!v) return alert('Enter teacher name'); const wb=ensureWorkbook(); const arr=readList(wb,'Teachers'); if(!arr.includes(v)) arr.push(v); writeList(wb,'Teachers',arr); saveWorkbook(wb); document.getElementById('teacherNew').value=''; renderMasters(); }
+function deleteTeacher(name){ if(!confirm('Delete teacher '+name+'?')) return; const wb=ensureWorkbook(); let arr=readList(wb,'Teachers'); arr = arr.filter(x=> x!==name); writeList(wb,'Teachers',arr); saveWorkbook(wb); renderMasters(); }
+
+function addSubject(){ const v=document.getElementById('subjectNew').value.trim(); if(!v) return alert('Enter subject'); const wb=ensureWorkbook(); const arr=readList(wb,'Subjects'); if(!arr.includes(v)) arr.push(v); writeList(wb,'Subjects',arr); saveWorkbook(wb); document.getElementById('subjectNew').value=''; renderMasters(); }
+function deleteSubject(name){ if(!confirm('Delete subject '+name+'?')) return; const wb=ensureWorkbook(); let arr=readList(wb,'Subjects'); arr = arr.filter(x=> x!==name); writeList(wb,'Subjects',arr); saveWorkbook(wb); renderMasters(); }
+
+function addExam(){ const v=document.getElementById('examNew').value.trim(); if(!v) return alert('Enter exam type'); const wb=ensureWorkbook(); const arr=readList(wb,'ExamTypes'); if(!arr.includes(v)) arr.push(v); writeList(wb,'ExamTypes',arr); saveWorkbook(wb); document.getElementById('examNew').value=''; renderMasters(); }
+function deleteExamType(name){ if(!confirm('Delete exam type '+name+'?')) return; const wb=ensureWorkbook(); let arr=readList(wb,'ExamTypes'); arr = arr.filter(x=> x!==name); writeList(wb,'ExamTypes',arr); saveWorkbook(wb); renderMasters(); }
+
+function addStudent(){
+  const grade = document.getElementById('studentGradeSelect').value;
+  const section = document.getElementById('studentSectionSelect').value;
+  const name = document.getElementById('studentNameNew').value.trim();
+  if(!grade || !section || !name) return alert('Select Grade, Section and enter Student Name');
+  const wb = ensureWorkbook();
+  const students = readStudents(wb);
+  const id = 'S' + Math.random().toString(36).slice(2,9);
+  students.push({ id, name, grade, section });
+  writeStudents(wb, students);
+  saveWorkbook(wb);
+  document.getElementById('studentNameNew').value = '';
+  renderMasters();
+}
+function deleteStudent(id){
+  if(!confirm('Delete this student?')) return;
+  const wb = ensureWorkbook();
+  const students = readStudents(wb).filter(s=> s.id !== id);
+  writeStudents(wb, students);
+  saveWorkbook(wb);
+  renderMasters();
+}
+
+/* ---------- Import / Export / Clear ---------- */
+document.getElementById('btnImportExcel').addEventListener('click', ()=> document.getElementById('fileExcel').click());
+document.getElementById('fileExcel').addEventListener('change', (ev)=>{
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = (e)=>{
+    try{
+      const wb = XLSX.read(e.target.result, { type:'array' });
+      const s = XLSX.write(wb, { bookType:'xlsx', type:'base64' });
+      localStorage.setItem(STORAGE.workbook, s);
+      alert('Import successful');
+      renderMasters();
+    } catch(err){
+      alert('Import failed: '+err.message);
+    }
+  };
+  r.readAsArrayBuffer(f);
+  ev.target.value = '';
+});
+document.getElementById('btnExportExcel').addEventListener('click', ()=>{
+  const wb = ensureWorkbook();
+  XLSX.writeFile(wb, (localStorage.getItem(STORAGE.school) || 'School') + '_Student_Progress.xlsx');
+});
+
+document.getElementById('btnClearAll').addEventListener('click', ()=> {
+  if(!confirm('Clear ALL local data in this browser?')) return;
+  localStorage.removeItem(STORAGE.workbook);
+  localStorage.removeItem(STORAGE.school);
+  location.reload();
+});
+
+/* ---------- School name ---------- */
+document.getElementById('btnSaveSchool').addEventListener('click', ()=>{
+  const v = document.getElementById('schoolInput').value.trim();
+  localStorage.setItem(STORAGE.school, v);
+  let headerLabel = document.querySelector('header .top .schoolLabel');
+  if(!headerLabel){
+    headerLabel = document.createElement('div');
+    headerLabel.className = 'schoolLabel';
+    headerLabel.innerHTML = `School: <span id="schoolLabel">${escapeHtml(v)}</span>`;
+    document.querySelector('header .top').appendChild(headerLabel);
+  } else {
+    const sp = headerLabel.querySelector('#schoolLabel');
+    if(sp) sp.innerText = v; else headerLabel.innerHTML = `School: <span id="schoolLabel">${escapeHtml(v)}</span>`;
+  }
+  try{ document.getElementById('schoolLabel').innerText = v; }catch(e){}
+});
+
+/* ---------- Marks Entry (LOAD with prefill using most recent per student) ---------- */
+document.getElementById('btnLoadGrid').addEventListener('click', ()=>{
+  const examType = document.getElementById('selExamType').value;
+  const max = Number(document.getElementById('inpMaxMarks').value);
+  const subject = document.getElementById('selSubject').value;
+  const grade = document.getElementById('selGrade').value;
+  const section = document.getElementById('selSection').value;
+  const date = document.getElementById('inpExamDate').value || new Date().toISOString().slice(0,10);
+
+  if(!examType || !subject || !grade || !section || !Number.isFinite(max) || max<=0){
+    return alert('Select Exam Type, Subject, Grade, Section and enter a valid Maximum Marks (>0).');
+  }
+
+  const wb = ensureWorkbook();
+  const students = readStudents(wb).filter(s => s.grade===grade && s.section===section).sort((a,b)=> a.name.localeCompare(b.name));
+  if(students.length===0){ document.getElementById('marksGrid').innerHTML = '<div class="muted">No students found for selected Grade/Section.</div>'; return; }
+
+  // Get all existing marks matching combo (grade+section+examType+subject)
+  const allMarks = readMarksPlain(wb);
+  const matched = allMarks.filter(m=> m.grade===grade && m.section===section && m.examType===examType && m.subject===subject);
+
+  // Build map studentId -> most recent record (by date if present)
+  const map = new Map();
+  matched.forEach(m=>{
+    const sid = m.studentId || m.studentId === 0 ? m.studentId : (m.studentName || '') + '::' + (m.date || '');
+    const existing = map.get(m.studentId);
+    if(!existing) map.set(m.studentId, m);
+    else {
+      // prefer latest date (if present)
+      try{
+        const dNew = new Date(m.date || 0); const dOld = new Date(existing.date || 0);
+        if(dNew > dOld) map.set(m.studentId, m);
+      }catch(e){ /* ignore */ }
+    }
+  });
+
+  let rows = '<table><thead><tr><th>#</th><th style="text-align:left">Student</th><th>Marks</th></tr></thead><tbody>';
+  students.forEach((st,i)=> {
+    const existing = map.get(st.id);
+    const val = existing ? (existing.score==null?0:existing.score) : 0;
+    rows += `<tr><td>${i+1}</td><td style="text-align:left">${escapeHtml(st.name)}</td><td><input data-student-id="${st.id}" type="number" min="0" max="${max}" step="0.01" value="${val}" class="scoreInput" style="width:120px" /></td></tr>`;
+  });
+  rows += '</tbody></table>';
+  document.getElementById('marksGrid').innerHTML = `<div class="muted">${grade}-${section} | ${subject} | ${examType} | Max: ${max} | Date: ${date}</div>` + rows;
+  document.getElementById('btnSaveMarks').classList.remove('hidden');
+});
+
+/* ---------- Save marks = OVERWRITE existing rows for that combo, then append new ---------- */
+document.getElementById('btnSaveMarks').addEventListener('click', ()=>{
+  const wb = ensureWorkbook();
+  const inputs = Array.from(document.querySelectorAll('.scoreInput'));
+  if(inputs.length===0) return alert('No marks grid to save.');
+
+  const examType = document.getElementById('selExamType').value;
+  const subject = document.getElementById('selSubject').value;
+  const grade = document.getElementById('selGrade').value;
+  const section = document.getElementById('selSection').value;
+  const max = Number(document.getElementById('inpMaxMarks').value);
+  const now = new Date().toISOString();
+
+  for(const inp of inputs){
+    const v = inp.value === '' ? null : Number(inp.value);
+    if(v !== null && (isNaN(v) || v < 0 || v > max)) return alert('Invalid marks detected. Please correct highlighted fields.');
+  }
+
+  // create new rows
+  const newRows = inputs.map(inp=>{
+    const sid = inp.getAttribute('data-student-id');
+    const students = readStudents(wb);
+    const stu = students.find(s=> s.id === sid) || { name: '' };
+    const val = inp.value === '' ? null : Number(inp.value);
+    return { studentId: sid, studentName: stu.name, grade, section, examType, subject, max, score: val, date: now };
+  });
+
+  // read existing marks array (plain objects)
+  const existingMarks = readMarksPlain(wb);
+
+  // Filter out any rows that match the same grade+section+examType+subject (overwrite those)
+  const filtered = existingMarks.filter(m => !(m.grade===grade && m.section===section && m.examType===examType && m.subject===subject));
+
+  // Combine and write back
+  const combined = filtered.concat(newRows);
+  writeMarks(wb, combined);
+  saveWorkbook(wb);
+
+  alert('Marks saved (overwrote previous entries for this Grade/Section/Exam/Subject).');
+  document.getElementById('marksGrid').innerHTML = '';
+  document.getElementById('btnSaveMarks').classList.add('hidden');
+  document.getElementById('saveStatus').textContent = 'Saved at ' + new Date().toLocaleString();
+});
+
+/* ---------- Views / tabs ---------- */
+const tabBtns = document.querySelectorAll('.tab');
+tabBtns.forEach(btn => btn.addEventListener('click', ()=>{
+  tabBtns.forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('section[id^="tab_"]').forEach(s => s.classList.add('hidden'));
+  document.getElementById('tab_' + btn.dataset.tab).classList.remove('hidden');
+}));
+
+// show/hide view panels
+document.getElementById('viewSelect').addEventListener('change', ()=>{
+  document.getElementById('viewStudentPanel').classList.add('hidden');
+  document.getElementById('viewGradePanel').classList.add('hidden');
+  document.getElementById('viewProgressPanel').classList.add('hidden');
+  const v = document.getElementById('viewSelect').value;
+  if(v==='student') document.getElementById('viewStudentPanel').classList.remove('hidden');
+  if(v==='grade') document.getElementById('viewGradePanel').classList.remove('hidden');
+  if(v==='progress') document.getElementById('viewProgressPanel').classList.remove('hidden');
+});
+
+/* ---------- Student-wise view ---------- */
+document.getElementById('vwStudentGrade').addEventListener('change', populateStudentsForView);
+document.getElementById('vwStudentSection').addEventListener('change', populateStudentsForView);
+function populateStudentsForView(){
+  const wb = ensureWorkbook();
+  const grade = document.getElementById('vwStudentGrade').value;
+  const section = document.getElementById('vwStudentSection').value;
+  const students = readStudents(wb).filter(s=> (!grade || s.grade===grade) && (!section || s.section===section)).map(s=> s.name);
+  fillOptions(document.getElementById('vwStudent'), students, true);
+}
+document.getElementById('btnShowStudent').addEventListener('click', ()=>{
+  const name = document.getElementById('vwStudent').value;
+  if(!name) return alert('Select student');
+  const wb = ensureWorkbook();
+  const marks = readMarksPlain(wb).filter(m=> m.studentName === name).sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+  if(marks.length===0){ document.getElementById('viewStudentWise').innerHTML = '<div class="muted">No marks found for selected student.</div>'; return; }
+  const rows = marks.map((m,i)=> `<tr><td>${i+1}</td><td>${escapeHtml(m.examType)}</td><td>${escapeHtml(m.subject)}</td><td>${m.score==null? '': m.score}</td><td>${m.max}</td><td>${m.max? ((m.score==null?'':((m.score/m.max)*100).toFixed(1)+'%')):''}</td><td>${m.date||''}</td></tr>`).join('');
+  const html = `<div class="chip">${escapeHtml(name)}</div><table><thead><tr><th>#</th><th>Exam</th><th>Subject</th><th>Marks</th><th>Max</th><th>%</th><th>Date</th></tr></thead><tbody>${rows}</tbody></table>`;
+  document.getElementById('viewStudentWise').innerHTML = html;
+});
+document.getElementById('btnPrintStudent').addEventListener('click', ()=> printArea('viewStudentPanel'));
+
+/* ---------- Grade-wise view ---------- */
+document.getElementById('btnShowGrade').addEventListener('click', ()=>{
+  const g = document.getElementById('vwGrade').value;
+  const s = document.getElementById('vwSection').value;
+  const ex = document.getElementById('vwExamType').value;
+  if(!g||!s||!ex) return alert('Select grade, section and exam');
+
+  const wb = ensureWorkbook();
+  const marks = readMarksPlain(wb).filter(m=> m.grade===g && m.section===s && m.examType===ex);
+  if(marks.length===0){ document.getElementById('viewGradeWise').innerHTML = '<div class="muted">No data</div>'; return; }
+
+  const subjects = Array.from(new Set(marks.map(m=> m.subject)));
+  const students = Array.from(new Set(marks.map(m=> m.studentName)));
+  let thead = '<thead><tr><th>#</th><th style="text-align:left">Student</th>' + subjects.map(su=> `<th>${escapeHtml(su)}</th>`).join('') + '<th>Total</th><th>%</th></tr></thead>';
+  let body = '';
+  students.forEach((st, idx)=>{
+    let total=0, maxTotal=0;
+    const tds = subjects.map(sub=>{
+      const rec = marks.find(m=> m.studentName===st && m.subject===sub);
+      if(rec && rec.max){
+        total += Number(rec.score||0); maxTotal += Number(rec.max||0);
+        return `<td>${rec.score==null? '': rec.score}/${rec.max}</td>`;
+      } else return '<td></td>';
+    }).join('');
+    const pct = maxTotal? ((total/maxTotal)*100).toFixed(1)+'%' : '';
+    body += `<tr><td>${idx+1}</td><td style="text-align:left">${escapeHtml(st)}</td>${tds}<td>${total}/${maxTotal||''}</td><td>${pct}</td></tr>`;
+  });
+
+  const html = `<div class="chip">${escapeHtml(g)}-${escapeHtml(s)}</div> <div class="chip">${escapeHtml(ex)}</div><table>${thead}<tbody>${body}</tbody></table>`;
+  document.getElementById('viewGradeWise').innerHTML = html;
+});
+document.getElementById('btnPrintGrade').addEventListener('click', ()=> printArea('viewGradePanel'));
+
+/* ---------- Progressive view (aggregate across all exams, percentage) ---------- */
+function populateProgStudents(){
+  const wb = ensureWorkbook();
+  const grade = document.getElementById('vwProgGrade').value;
+  const section = document.getElementById('vwProgSection').value;
+  const students = readStudents(wb).filter(s=> (!grade || s.grade===grade) && (!section || s.section===section)).map(s=> s.name);
+  fillOptions(document.getElementById('vwProgStudent'), students, true);
+}
+document.getElementById('vwProgGrade').addEventListener('change', populateProgStudents);
+document.getElementById('vwProgSection').addEventListener('change', populateProgStudents);
+
+let progressChart = null;
+document.getElementById('btnShowProgress').addEventListener('click', ()=>{
+  const student = document.getElementById('vwProgStudent').value;
+  if(!student) return alert('Select a student');
+  const wb = ensureWorkbook();
+  const marks = readMarksPlain(wb).filter(m=> m.studentName === student);
+  if(marks.length===0){ document.getElementById('viewStudentProgress').innerHTML = '<div class="muted">No marks yet.</div>'; if(progressChart){ progressChart.destroy(); } return; }
+
+  let subjects = readList(wb,'Subjects');
+  if(!subjects || subjects.length===0) subjects = Array.from(new Set(marks.map(m=> m.subject)));
+
+  const agg = subjects.map(sub=>{
+    const recs = marks.filter(m=> m.subject === sub);
+    const totalObt = recs.reduce((s,r)=> s + (r.score==null?0:Number(r.score)), 0);
+    const totalMax = recs.reduce((s,r)=> s + (Number(r.max)||0), 0);
+    const pct = totalMax? (totalObt/totalMax)*100 : 0;
+    return { subject: sub, pct: Number(pct.toFixed(1)), obtained: totalObt, max: totalMax };
+  });
+
+  const labels = agg.map(a=> a.subject);
+  const data = agg.map(a=> a.pct);
+  const type = document.getElementById('chartTypeSelect').value || 'bar';
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  if(progressChart) progressChart.destroy();
+
+  progressChart = new Chart(ctx, {
+    type,
+    data: { labels, datasets: [{ label: 'Aggregate % (all exams)', data, backgroundColor: 'rgba(37,99,235,0.7)', borderColor: 'rgba(37,99,235,1)', borderWidth:1, fill: false }] },
+    options: {
+      responsive:true,
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label(ctx){
+              const idx = ctx.dataIndex;
+              const rec = agg[idx];
+              return `${rec.pct}%  (${rec.obtained}/${rec.max})`;
+            }
+          }
+        },
+        legend:{position:'top'}
+      },
+      scales:{ y:{ beginAtZero:true, max:100, ticks:{ callback: v => v + '%' } } }
+    }
+  });
+
+  // make sure chart displays properly (if container was hidden previously)
+  setTimeout(()=> { try{ progressChart.resize(); } catch(e){} }, 120);
+  document.getElementById('viewStudentProgress').innerHTML = `<div class="chip">${escapeHtml(student)}</div>`;
+});
+
+/* ---------- Download chart image ---------- */
+document.getElementById('btnDownloadChart').addEventListener('click', ()=>{
+  if(!progressChart) return alert('No chart available to download. Run "Show" first.');
+  const url = progressChart.toBase64Image();
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'student_progress_chart.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+/* ---------- Print util ---------- */
+function printArea(containerId){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const w = window.open('','_blank');
+  const school = localStorage.getItem(STORAGE.school) || (document.querySelector('header .top .schoolLabel') ? document.getElementById('schoolLabel').innerText : '');
+  const style = `<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px} .school{font-size:20px;font-weight:800;text-align:center;margin-bottom:6px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #222;padding:6px;text-align:center} th{background:#2f80ed;color:#fff}</style>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print</title>${style}</head><body><div class="school">${escapeHtml(school)}</div>` + el.innerHTML + '</body></html>');
+  w.document.close();
+  setTimeout(()=> w.print(), 300);
+}
+
+/* ---------- Initialization ---------- */
+(function init(){
+  const wb = ensureWorkbook();
+  const savedSchool = localStorage.getItem(STORAGE.school) || '';
+  let headerLabel = document.querySelector('header .top .schoolLabel');
+  if(!headerLabel){
+    headerLabel = document.createElement('div');
+    headerLabel.className = 'schoolLabel';
+    headerLabel.innerHTML = `School: <span id="schoolLabel">${escapeHtml(savedSchool)}</span>`;
+    document.querySelector('header .top').appendChild(headerLabel);
+  } else {
+    const sp = headerLabel.querySelector('#schoolLabel');
+    if(sp) sp.innerText = savedSchool;
+  }
+  document.getElementById('schoolInput').value = savedSchool;
+
+  // wire add buttons
+  document.getElementById('btnAddGrade').addEventListener('click', addGrade);
+  document.getElementById('btnAddSection').addEventListener('click', addSection);
+  document.getElementById('btnAddStudent').addEventListener('click', addStudent);
+  document.getElementById('btnAddTeacher').addEventListener('click', addTeacher);
+  document.getElementById('btnAddSubject').addEventListener('click', addSubject);
+  document.getElementById('btnAddExam').addEventListener('click', addExam);
+
+  // render lists & pickers
+  renderMasters();
+
+  // populate view student pickers
+  setTimeout(()=>{ renderMasters(); populateStudentsForView(); populateProgStudents(); }, 60);
+})();
+</script>
+</body>
+</html>

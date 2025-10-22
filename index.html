@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SmartSchool Dashboard</title>
+  <style>
+    :root{
+      --brand:#0078d7;
+      --brand-dark:#005a9e;
+      --banner-bg:#2e7d32;
+      --banner-text:#ffffff;
+      --header-pad:10px 16px;
+    }
+    html,body{height:100%;margin:0;font-family:Segoe UI, Roboto, Arial, sans-serif;background:#f3f4f6;}
+    header{display:flex;align-items:center;justify-content:space-between;background:var(--brand);color:#fff;padding:var(--header-pad);gap:12px;}
+    .left-head{display:flex;align-items:center;gap:12px;min-width:0;}
+    #toggleSidebar{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;padding:6px 8px;border-radius:6px}
+    #appTitle{margin:0;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #licenseBanner{font-size:14px;color:var(--banner-text);padding:6px 12px;border-radius:6px;background:var(--banner-bg);min-width:220px;text-align:center}
+    #btnActivate{background:var(--brand-dark);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+    main{display:flex;height:calc(100vh - 56px);overflow:hidden}
+    #moduleGrid{width:260px;background:#fff;border-right:1px solid #e6e6e6;overflow:auto;transition:width .22s ease}
+    #moduleGrid.hidden{width:0;min-width:0}
+    .grid-inner{padding:12px}
+    .card{background:#fff;margin:10px 0;padding:12px;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer;display:flex;align-items:center;gap:10px}
+    .card .icon{font-size:20px; width:34px; text-align:center}
+    .card .title{font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .card.locked{opacity:.6}
+    .module-view{flex:1;display:flex;flex-direction:column;background:#fff}
+    #moduleHeader{padding:12px;background:#fafafa;border-bottom:1px solid #eee;font-weight:600}
+    iframe{flex:1;border:0;width:100%}
+    /* Activation modal */
+    #activationBox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);align-items:center;justify-content:center;z-index:1200}
+    #activationBox .panel{background:#fff;padding:20px;border-radius:8px;width:420px;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+    textarea#licenseInput{width:100%;height:110px;margin-top:8px;padding:8px;border:1px solid #ddd;border-radius:6px;resize:vertical}
+    .row{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .btn{padding:8px 12px;border-radius:6px;border:none;cursor:pointer}
+    .btn.primary{background:var(--brand);color:#fff}
+    .btn.ghost{background:#eee}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="left-head">
+      <button id="toggleSidebar" title="Toggle sidebar">☰</button>
+      <h1 id="appTitle">SmartSchool Dashboard</h1>
+    </div>
+
+    <div id="licenseBanner">Checking license...</div>
+
+    <div>
+      <button id="btnActivate">Activate License</button>
+    </div>
+  </header>
+
+  <main>
+    <aside id="moduleGrid" aria-hidden="false">
+      <div class="grid-inner" id="gridInner"><!-- cards injected here --></div>
+    </aside>
+
+    <section class="module-view">
+      <div id="moduleHeader">Select a module</div>
+      <iframe id="moduleFrame" src=""></iframe>
+    </section>
+  </main>
+
+  <!-- Activation modal -->
+  <div id="activationBox" role="dialog" aria-modal="true">
+    <div class="panel">
+      <h3>Activate SmartSchool</h3>
+      <p><b>Installation ID:</b></p>
+      <div id="installIdText" style="word-break:break-all;background:#fafafa;padding:8px;border-radius:6px;border:1px solid #eee"></div>
+      <textarea id="licenseInput" placeholder="Paste your license key here..."></textarea>
+      <div class="row">
+        <button id="cancelLicense" class="btn ghost">Cancel</button>
+        <button id="submitLicense" class="btn primary">Activate</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

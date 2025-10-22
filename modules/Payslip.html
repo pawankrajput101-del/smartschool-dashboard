@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Salary Manager - Final</title>
+  <style>
+    :root{--accent:#0366d6;--muted:#666;--bg:#f6f8fa}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:0;background:var(--bg);color:#222}
+    header{background:linear-gradient(90deg,var(--accent),#0b7bdc);color:white;padding:14px 20px}
+    h1{margin:0;font-size:18px}
+    .container{padding:18px;max-width:1100px;margin:18px auto}
+    nav{display:flex;gap:8px;margin:14px 0 18px;align-items:center}
+    .tab{padding:8px 12px;border-radius:8px;background:white;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer;font-weight:600}
+    .tab.active{outline:3px solid rgba(3,102,214,.12)}
+    section.panel{display:none;background:white;padding:16px;border-radius:8px;box-shadow:0 6px 22px rgba(11,20,35,.06)}
+    section.panel.active{display:block}
+    form.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+    label{font-size:13px;color:var(--muted);display:block;margin-bottom:6px}
+    input,select,button,textarea{padding:10px;border:1px solid #e3e6ea;border-radius:8px;width:100%;font-size:14px}
+    .small{font-size:12px;color:var(--muted)}
+    table{width:100%;border-collapse:collapse;margin-top:14px}
+    th,td{padding:8px;border-bottom:1px solid #f0f0f0;text-align:left;font-size:13px}
+    th{background:#fafafa}
+    .btn{padding:8px 12px;border-radius:8px;border:0;background:var(--accent);color:white;cursor:pointer}
+    .btn.secondary{background:#0b85e8}
+    .btn.danger{background:#c62828}
+    .flex{display:flex;gap:8px;align-items:center}
+    .right{margin-left:auto}
+    .muted{color:var(--muted)}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .card{padding:12px;border-radius:10px;background:#fff;border:1px solid #eef3fb}
+    .inline-note{font-size:12px;color:#6b7280}
+    .pill{display:inline-block;padding:6px 8px;border-radius:999px;background:#f3f8ff;color:#0366d6;font-weight:600}
+    @media (max-width:720px){.container{padding:12px}.tab{font-size:13px}}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container"><h1>Salary Manager — Master • Entries • Slip • Advance • Leave • Summary (Final)</h1></div>
+  </header>
+
+  <div class="container">
+    <nav>
+      <div class="tab active" data-tab="master">Master</div>
+      <div class="tab" data-tab="entries">Entries</div>
+      <div class="tab" data-tab="slip">Slip</div>
+      <div class="tab" data-tab="advance">Advance</div>
+      <div class="tab" data-tab="leave">Leave</div>
+      <div class="tab" data-tab="summary">Summary</div>
+      <div class="right small muted">Data stored in browser (localStorage).</div>
+    </nav>
+
+    <!-- MASTER -->
+    <section id="master" class="panel active">
+      <h3>1) Master (add / update employee once)</h3>
+      <form id="masterForm" class="row" onsubmit="return false;">
+        <div>
+          <label>Employee ID</label>
+          <input id="m_empId" readonly>
+        </div>
+        <div>
+          <label>Name</label>
+          <input id="m_name" required placeholder="Employee name">
+        </div>
+        <div>
+          <label>Designation</label>
+          <input id="m_desig" placeholder="Teacher">
+        </div>
+        <div>
+          <label>Department</label>
+          <input id="m_dept" placeholder="Math">
+        </div>
+        <div>
+          <label>Basic Pay (monthly)</label>
+          <input id="m_basic" type="number" min="0" value="0">
+        </div>
+        <div>
+          <label>HRA</label>
+          <input id="m_hra" type="number" min="0" value="0">
+        </div>
+        <div>
+          <label>DA</label>
+          <input id="m_da" type="number" min="0" value="0">
+        </div>
+        <div>
+          <label>Other Allowances</label>
+          <input id="m_other" type="number" min="0" value="0">
+        </div>
+        <div>
+          <label>Annual Leave Entitlement (days / financial year)</label>
+          <input id="m_annualLeave" type="number" min="0" value="12">
+        </div>
+        <div>
+          <label>PF Applicable</label>
+          <select id="m_pfApp"><option value="yes">Yes</option><option value="no" selected>No</option></select>
+        </div>
+        <div>
+          <label>ESI Applicable</label>
+          <select id="m_esiApp"><option value="yes">Yes</option><option value="no" selected>No</option></select>
+        </div>
+
+        <div class="flex" style="grid-column:1/-1">
+          <button class="btn" id="newEmp" type="button">New Employee</button>
+          <button class="btn" id="saveMaster" type="button">Save / Update</button>
+          <button class="btn secondary" id="clearMaster" type="button">Clear Form</button>
+          <button class="btn" id="exportMaster" type="button">Export Master CSV</button>
+          <button class="btn" id="importMasterBtn" type="button">Import Master CSV</button>
+          <input id="masterFile" type="file" accept="text/csv" style="display:none">
+          <button class="btn" id="backupAll" type="button">Backup All (JSON)</button>
+          <button class="btn secondary" id="restoreAllBtn" type="button">Restore All</button>
+          <input id="restoreFile" type="file" accept="application/json,text/json" style="display:none">
+        </div>
+      </form>
+
+      <div style="margin-top:12px">
+        <strong>Master List</strong>
+        <table id="masterTable"><thead><tr><th>Emp ID</th><th>Name</th><th>Desig</th><th>Dept</th><th>Basic</th><th>HRA</th><th>DA</th><th>Other</th><th>Annual</th><th>PF</th><th>ESI</th><th>Actions</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- ENTRIES -->
+    <section id="entries" class="panel">
+      <h3>2) Monthly Entries</h3>
+      <p class="small muted">Select employee & enter month-specific variables. PF (12%), ESI (0.75%) apply only if enabled in Master. LOP auto-calculated from approved unpaid leaves for the month. Advance deduction may be recorded in Advance Ledger or entered manually (which will create a ledger deduction).</p>
+      <form id="entryForm" class="row" onsubmit="return false;">
+        <div>
+          <label>Employee (ID)</label>
+          <select id="e_empId"></select>
+        </div>
+        <div>
+          <label>Month (e.g. 2025-09)</label>
+          <input id="e_month" placeholder="YYYY-MM" required>
+        </div>
+        <div>
+          <label>Extra Deductions (other than PF/ESI/Advance)</label>
+          <input id="e_extraDed" type="number" value="0">
+        </div>
+        <div>
+          <label>Advance Deduction (manual)</label>
+          <input id="e_advDed" type="number" value="0">
+        </div>
+
+        <div class="flex" style="grid-column:1/-1">
+          <button class="btn" id="saveEntry" type="button">Save Entry</button>
+          <button class="btn secondary" id="clearEntry" type="button">Clear</button>
+          <button class="btn" id="exportEntries" type="button">Export Entries CSV</button>
+          <button class="btn" id="importEntriesBtn" type="button">Import Entries CSV</button>
+          <input id="entriesFile" type="file" accept="text/csv" style="display:none">
+        </div>
+      </form>
+
+      <div style="margin-top:12px">
+        <strong>Monthly Entries</strong>
+        <table id="entriesTable"><thead><tr><th>Emp ID</th><th>Month</th><th>Gross</th><th>PF</th><th>ESI</th><th>AdvanceDed</th><th>LOP</th><th>Extra</th><th>Total Ded</th><th>Net</th><th>Actions</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- SLIP -->
+    <section id="slip" class="panel">
+      <h3>3) Salary Slip Generator</h3>
+      <div class="row">
+        <div>
+          <label>Employee ID</label>
+          <select id="s_empId"></select>
+        </div>
+        <div>
+          <label>Month (YYYY-MM)</label>
+          <input id="s_month" placeholder="2025-09">
+        </div>
+        <div class="flex" style="grid-column:1/-1">
+          <button class="btn" id="generateSlip" type="button">Generate Slip</button>
+          <button class="btn secondary" id="printSlip" type="button">Print Slip</button>
+        </div>
+      </div>
+
+      <div id="slipArea" style="margin-top:12px;padding:12px;border:1px dashed #e6eef9;border-radius:8px;background:#fff">
+        <div id="slipContent" style="max-width:720px;margin:0 auto">
+          <div id="slipBody" class="small muted">No slip yet. Choose employee & month and click Generate.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADVANCE -->
+    <section id="advance" class="panel">
+      <h3>4) Advance Ledger</h3>
+      <p class="small muted">Record advances taken and manual deductions. Advance deductions are recorded here or when confirmed from Entries.</p>
+      <div class="row">
+        <div>
+          <label>Employee</label>
+          <select id="a_empId"></select>
+        </div>
+        <div>
+          <label>Date (YYYY-MM)</label>
+          <input id="a_date" placeholder="2025-09">
+        </div>
+        <div>
+          <label>Amount (positive = taken, negative = deduction)</label>
+          <input id="a_amount" type="number" value="0">
+        </div>
+        <div>
+          <label>Note</label>
+          <input id="a_note" placeholder="Salary advance / deduction note">
+        </div>
+        <div class="flex" style="grid-column:1/-1">
+          <button class="btn" id="addAdvance" type="button">Add Transaction</button>
+          <button class="btn secondary" id="exportAdvance" type="button">Export Ledger CSV</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <strong>Ledger & Balance</strong>
+        <div id="advanceList" style="margin-top:8px"></div>
+      </div>
+    </section>
+
+    <!-- LEAVE -->
+    <section id="leave" class="panel">
+      <h3>5) Leave Management</h3>
+      <p class="small muted">Create leave requests, approve/reject and track paid vs unpaid leaves. Approved unpaid leaves cause LOP; approved paid leaves reduce entitlement.</p>
+      <form id="leaveForm" class="row" onsubmit="return false;">
+        <div>
+          <label>Employee</label>
+          <select id="l_empId"></select>
+        </div>
+        <div>
+          <label>Month (YYYY-MM)</label>
+          <input id="l_month" placeholder="2025-09">
+        </div>
+        <div>
+          <label>Number of Days</label>
+          <input id="l_days" type="number" min="1" value="1">
+        </div>
+        <div>
+          <label>Type</label>
+          <select id="l_type"><option value="Paid">Paid</option><option value="Unpaid">Unpaid</option></select>
+        </div>
+        <div>
+          <label>Reason</label>
+          <input id="l_reason" placeholder="Reason">
+        </div>
+        <div class="flex" style="grid-column:1/-1">
+          <button class="btn" id="addLeave" type="button">Add Leave Request</button>
+          <button class="btn secondary" id="exportLeaves" type="button">Export Leaves CSV</button>
+          <button class="btn" id="printLeaves" type="button">Print Leaves</button>
+        </div>
+      </form>
+
+      <div style="margin-top:12px">
+        <strong>Leave Requests</strong>
+        <table id="leavesTable"><thead><tr><th>Emp ID</th><th>Month</th><th>Days</th><th>Type</th><th>Status</th><th>Note</th><th>Actions</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section id="summary" class="panel">
+      <h3>6) Monthly Summary</h3>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+        <input id="sum_month" placeholder="YYYY-MM">
+        <button class="btn" id="showSummary">Show Summary</button>
+        <button class="btn secondary" id="printSummary">Print Summary</button>
+        <button class="btn" id="exportSummary">Export Summary CSV</button>
+      </div>
+      <div id="summaryArea" class="card"></div>
+    </section>
+
+  </div>
+
+<script>
+// Keys
+const MASTER_KEY='salary_master_final_v1';
+const ENTRY_KEY='salary_entries_final_v1';
+const ADV_KEY='salary_adv_final_v1';
+const LEAVE_REQ_KEY='salary_leave_requests_final_v1';
+const LEAVE_SUM_KEY='salary_leaves_final_v1';
+
+// Load data
+let masters = JSON.parse(localStorage.getItem(MASTER_KEY)||'[]');
+let entries = JSON.parse(localStorage.getItem(ENTRY_KEY)||'[]');
+let advances = JSON.parse(localStorage.getItem(ADV_KEY)||'[]');
+let leaveRequests = JSON.parse(localStorage.getItem(LEAVE_REQ_KEY)||'[]');
+let leavesData = JSON.parse(localStorage.getItem(LEAVE_SUM_KEY)||'{}');
+
+// Helpers
+const qs=id=>document.getElementById(id);
+const qsa=(sel,root=document)=>Array.from(root.querySelectorAll(sel));
+function saveMaster(){localStorage.setItem(MASTER_KEY,JSON.stringify(masters));}
+function saveEntries(){localStorage.setItem(ENTRY_KEY,JSON.stringify(entries));}
+function saveAdv(){localStorage.setItem(ADV_KEY,JSON.stringify(advances));}
+function saveLeaveReq(){localStorage.setItem(LEAVE_REQ_KEY,JSON.stringify(leaveRequests));}
+function saveLeaves(){localStorage.setItem(LEAVE_SUM_KEY,JSON.stringify(leavesData));}
+function round(v){return Math.round((Number(v)||0)*100)/100}
+
+// Tabs
+qsa('.tab').forEach(t=>t.addEventListener('click',()=>{qsa('.tab').forEach(x=>x.classList.remove('active'));qsa('section.panel').forEach(x=>x.classList.remove('active'));t.classList.add('active');qs(t.dataset.tab).classList.add('active');refreshSelects();}))
+
+// Generate next Emp ID (based on numeric suffix of last IDs)
+function getNextEmpId(){let max=0; masters.forEach(m=>{const match = String(m.empId).match(/(\d+)$/); if(match) max=Math.max(max, parseInt(match[1],10));}); return 'EMP'+(max+1);} 
+function newEmployeeForm(){qs('m_empId').value=getNextEmpId(); qs('m_empId').readOnly=true; qs('m_name').value=''; qs('m_desig').value=''; qs('m_dept').value=''; qs('m_basic').value=0; qs('m_hra').value=0; qs('m_da').value=0; qs('m_other').value=0; qs('m_annualLeave').value=12; qs('m_pfApp').value='no'; qs('m_esiApp').value='no';}
+qs('newEmp').addEventListener('click',()=>{newEmployeeForm(); alert('New Employee ID generated. Fill details and click Save.');})
+
+// Render master table
+function renderMaster(){const tbody=qs('masterTable').querySelector('tbody'); tbody.innerHTML=''; masters.forEach(m=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${m.empId}</td><td>${m.name}</td><td>${m.desig||''}</td><td>${m.dept||''}</td><td>${m.basic}</td><td>${m.hra}</td><td>${m.da}</td><td>${m.other}</td><td>${m.annualLeave||12}</td><td>${m.pfApp? 'Yes':'No'}</td><td>${m.esiApp? 'Yes':'No'}</td><td><button class="btn edit-master" data-id="${m.empId}" type="button">Edit</button> <button class="btn danger delete-master" data-id="${m.empId}" type="button">Delete</button></td>`; tbody.appendChild(tr);}); }
+
+// Edit / Delete handlers (event delegation)
+qs('masterTable').addEventListener('click', (e)=>{ const btn = e.target; if(btn.classList.contains('edit-master')){ const id=btn.dataset.id; editMaster(id);} if(btn.classList.contains('delete-master')){ const id=btn.dataset.id; if(confirm('Delete master record?')){ masters = masters.filter(x=>x.empId!==id); saveMaster(); renderMaster(); refreshSelects(); alert('Deleted') } } })
+
+function editMaster(id){const m=masters.find(x=>x.empId===id); if(!m) return; qs('m_empId').value=m.empId; qs('m_name').value=m.name; qs('m_desig').value=m.desig; qs('m_dept').value=m.dept; qs('m_basic').value=m.basic; qs('m_hra').value=m.hra; qs('m_da').value=m.da; qs('m_other').value=m.other; qs('m_annualLeave').value=m.annualLeave||12; qs('m_pfApp').value = m.pfApp ? 'yes':'no'; qs('m_esiApp').value = m.esiApp ? 'yes':'no'; qs('m_empId').readOnly=true; }
+
+// Save master
+qs('saveMaster').addEventListener('click',()=>{ const empId = qs('m_empId').value.trim(); if(!empId){alert('Generate Employee ID first (click New Employee)'); return;} const rec={ empId, name:qs('m_name').value.trim(), desig:qs('m_desig').value.trim(), dept:qs('m_dept').value.trim(), basic:Number(qs('m_basic').value||0), hra:Number(qs('m_hra').value||0), da:Number(qs('m_da').value||0), other:Number(qs('m_other').value||0), annualLeave:Number(qs('m_annualLeave').value||12), pfApp: qs('m_pfApp').value==='yes', esiApp: qs('m_esiApp').value==='yes' }; const idx = masters.findIndex(x=>x.empId===empId); if(idx>=0) masters[idx]=rec; else masters.push(rec); saveMaster(); renderMaster(); refreshSelects(); alert('Saved master record'); })
+qs('clearMaster').addEventListener('click',()=>{ newEmployeeForm(); })
+
+// Salary math
+function computeGross(master){return (Number(master.basic)||0)+(Number(master.hra)||0)+(Number(master.da)||0)+(Number(master.other)||0)}
+function computePF(master){ if(!master.pfApp) return 0; return (Number(master.basic)||0)*0.12 }
+function computeESI(master, gross){ if(!master.esiApp) return 0; return gross*0.0075 }
+function computeLOPFromLeaves(empId, month, workingDays=26){ // sum Approved Unpaid leaves for that month
+  const ymonth = (month||new Date().toISOString().slice(0,7)); const rows = leaveRequests.filter(l=> l.empId===empId && l.month===ymonth && l.type==='Unpaid' && l.status==='Approved'); const days = rows.reduce((s,r)=>s + Number(r.days||0),0); const master = masters.find(m=>m.empId===empId) || {basic:0}; const gross = computeGross(master); return (gross/workingDays)*days; }
+
+// Entries UI logic
+function refreshSelects(){ ['e_empId','s_empId','a_empId','l_empId'].forEach(id=>{ const sel=qs(id); if(!sel) return; const prev = sel.value; sel.innerHTML='<option value=\"\">--select--</option>'; masters.forEach(m=>{ const o=document.createElement('option'); o.value=m.empId; o.textContent=`${m.empId} - ${m.name}`; sel.appendChild(o); }); try{ sel.value = prev }catch(e){} }); renderEntries(); renderMaster(); renderAdvanceList(); renderLeavesTable(); }
+
+qs('e_empId').addEventListener('change',()=>{ updateLOPpreview(); })
+qs('e_month').addEventListener('change',()=>{ updateLOPpreview(); })
+
+function updateLOPpreview(){ const id=qs('e_empId').value; const month=qs('e_month').value; if(!id) return; const master = masters.find(m=>m.empId===id); if(!master) return; const gross = computeGross(master); const lop = computeLOPFromLeaves(id, month); const pf = round(computePF(master)); const esi = round(computeESI(master,gross)); qs('e_lop_preview')?.remove(); const note = document.createElement('div'); note.id='e_lop_preview'; note.className='small muted'; note.style.gridColumn='1/-1'; note.textContent = `Preview — Gross: ${round(gross)} | PF: ${pf} | ESI: ${esi} | LOP (unpaid approved days): ${round(lop)}`; const form = qs('entryForm'); form.appendChild(note); }
+
+qs('saveEntry').addEventListener('click',()=>{
+  const empId = qs('e_empId').value; if(!empId){alert('choose employee'); return;} const master = masters.find(m=>m.empId===empId); if(!master){alert('master missing'); return;} const month = qs('e_month').value.trim(); if(!month){alert('enter month'); return;} const extra = Number(qs('e_extraDed').value||0); const advInput = Number(qs('e_advDed').value||0);
+  const gross = round(computeGross(master)); const pf = round(computePF(master)); const esi = round(computeESI(master,gross)); const lop = round(computeLOPFromLeaves(empId, month));
+
+  // If user entered manual advance deduction while saving, record it in ledger (negative amount)
+  if(advInput && advInput>0){
+    if(confirm(`Record advance deduction of ${advInput} for ${empId} / ${month}? This will create a ledger deduction.`)){
+      addAdvanceTransaction(empId, month, -Math.abs(advInput), 'deduction', 'Deduction from Entries');
+    }
+  }
+
+  // Sum all advance deductions from ledger for this emp & month (amounts < 0)
+  const advRows = advances.filter(a=> String(a.empId)===String(empId) && String(a.date)===String(month));
+  const advDedSum = advRows.reduce((s,r)=> s + (Number(r.amount) < 0 ? Math.abs(Number(r.amount)) : 0), 0);
+
+  const totalDed = round(pf + esi + lop + extra + advDedSum);
+  const net = round(gross - totalDed);
+  const id = empId + '|' + month;
+  const rec = { id, empId, month, gross, pf, esi, advDed: advDedSum, lop, extra, totalDed, net };
+  const idx = entries.findIndex(x=>x.id===id);
+  if(idx>=0) entries[idx]=rec; else entries.push(rec);
+  saveEntries(); renderEntries(); saveAdv(); saveLeaves(); alert('Entry saved')
+})
+
+function renderEntries(){ const tbody = qs('entriesTable').querySelector('tbody'); tbody.innerHTML=''; entries.forEach(e=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${e.empId}</td><td>${e.month}</td><td>${e.gross}</td><td>${e.pf}</td><td>${e.esi}</td><td>${e.advDed||0}</td><td>${e.lop}</td><td>${e.extra}</td><td>${e.totalDed}</td><td>${e.net}</td><td><button class="btn edit-entry" data-id="${e.id}" type="button">Edit</button> <button class="btn danger delete-entry" data-id="${e.id}" type="button">Delete</button></td>`; tbody.appendChild(tr); }); }
+
+// entry edit/delete
+qs('entriesTable').addEventListener('click',(ev)=>{ const btn=ev.target; if(btn.classList.contains('edit-entry')){ const id=btn.dataset.id; const e = entries.find(x=>x.id===id); if(!e) return; qs('e_empId').value=e.empId; qs('e_month').value=e.month; qs('e_extraDed').value=e.extra||0; qs('e_advDed').value=e.advDed||0; updateLOPpreview(); } if(btn.classList.contains('delete-entry')){ const id=btn.dataset.id; if(confirm('Delete entry?')){ entries=entries.filter(x=>x.id!==id); saveEntries(); renderEntries(); alert('Deleted entry'); } } })
+
+qs('clearEntry').addEventListener('click',()=>{ qs('e_empId').value=''; qs('e_month').value=''; qs('e_extraDed').value=0; qs('e_advDed').value=0; qs('e_lop_preview')?.remove(); })
+
+// Leave helpers & requests
+function getFYStartYearForMonth(ym){ if(!ym || ym.length<7) return new Date().getFullYear(); const year = Number(ym.slice(0,4)); const month = Number(ym.slice(5,7)); return (month>=4)?year:(year-1); }
+
+qs('addLeave').addEventListener('click',()=>{ const emp=qs('l_empId').value; if(!emp){alert('Choose employee'); return;} const month=qs('l_month').value||new Date().toISOString().slice(0,7); const days=Number(qs('l_days').value||1); const type=qs('l_type').value; const reason=qs('l_reason').value||''; const id = emp + '|' + month + '|' + Math.random().toString(36).slice(2,8); const rec = { id, empId:emp, month, days, type, reason, status:'Pending', created: new Date().toISOString() }; leaveRequests.push(rec); saveLeaveReq(); renderLeavesTable(); alert('Leave request added (Pending)'); })
+
+function renderLeavesTable(){ const tbody = qs('leavesTable').querySelector('tbody'); tbody.innerHTML=''; leaveRequests.forEach(l=>{ const tr=document.createElement('tr'); tr.innerHTML = `<td>${l.empId}</td><td>${l.month}</td><td>${l.days}</td><td>${l.type}</td><td>${l.status}</td><td>${l.reason||''}</td><td>${l.status==='Pending'?`<button class="btn" data-id="${l.id}" data-act="approve">Approve</button> <button class="btn danger" data-id="${l.id}" data-act="reject">Reject</button>`:`<button class="btn" data-id="${l.id}" data-act="view">View</button>`} <button class="btn danger" data-id="${l.id}" data-act="delete">Delete</button></td>`; tbody.appendChild(tr); }); }
+
+qs('leavesTable').addEventListener('click',(ev)=>{ const btn = ev.target; const id = btn.dataset.id; const act = btn.dataset.act; if(!id) return; const idx = leaveRequests.findIndex(x=>x.id===id); if(idx<0) return; const rec = leaveRequests[idx]; if(act==='approve'){ // approve and update leave balances if Paid
+    if(confirm('Approve this leave?')){ leaveRequests[idx].status='Approved'; if(rec.type==='Paid'){ const fy = getFYStartYearForMonth(rec.month); if(!leavesData[rec.empId]) leavesData[rec.empId]={}; if(!leavesData[rec.empId][fy]) leavesData[rec.empId][fy] = {entitlement: (masters.find(m=>m.empId===rec.empId)?.annualLeave||12), used:0}; leavesData[rec.empId][fy].used = Number(leavesData[rec.empId][fy].used||0) + Number(rec.days||0); leavesData[rec.empId][fy].balance = leavesData[rec.empId][fy].entitlement - leavesData[rec.empId][fy].used; saveLeaves(); } saveLeaveReq(); renderLeavesTable(); alert('Leave approved'); } }
+  if(act==='reject'){ if(confirm('Reject this leave?')){ leaveRequests[idx].status='Rejected'; saveLeaveReq(); renderLeavesTable(); alert('Leave rejected'); } }
+  if(act==='delete'){ if(confirm('Delete this leave request?')){ leaveRequests.splice(idx,1); saveLeaveReq(); renderLeavesTable(); alert('Deleted'); } }
+})
+
+function getLeaveUsed(empId, fy){ return (leavesData[empId] && leavesData[empId][fy]) ? (leavesData[empId][fy].used||0) : 0; }
+function getLeaveBalance(empId, fy){ return (leavesData[empId] && leavesData[empId][fy]) ? (leavesData[empId][fy].entitlement - leavesData[empId][fy].used) : ((masters.find(m=>m.empId===empId)?.annualLeave) || 0); }
+
+// Slip generator
+qs('generateSlip').addEventListener('click',()=>{ const empId = qs('s_empId').value; const month = qs('s_month').value.trim(); if(!empId||!month){alert('choose employee and month'); return;} const rec = entries.find(x=>x.empId===empId && x.month===month); if(!rec){qs('slipBody').innerHTML=`<div class="muted">No entry found for ${empId} / ${month} — create it under Entries</div>`; return;} const master = masters.find(m=>m.empId===empId); const fy = getFYStartYearForMonth(month); const paidUsed = getLeaveUsed(empId, fy); const leaveBal = getLeaveBalance(empId, fy); const html = `<div style="font-family:inherit;"><div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${master.name} (${empId})</strong><br><span class="small muted">${master.desig||''} — ${master.dept||''}</span></div><div style="text-align:right"><strong>Month:</strong> ${rec.month}</div></div><hr>
+  <table style="width:100%"><tbody>
+  <tr><td>Basic Pay</td><td>${master.basic}</td><td>PF Applicable</td><td>${master.pfApp? 'Yes':'No'}</td></tr>
+  <tr><td>HRA</td><td>${master.hra}</td><td>PF</td><td>${rec.pf}</td></tr>
+  <tr><td>DA</td><td>${master.da}</td><td>ESI Applicable</td><td>${master.esiApp? 'Yes':'No'}</td></tr>
+  <tr><td>Other Allowances</td><td>${master.other}</td><td>ESI</td><td>${rec.esi}</td></tr>
+  <tr><td><strong>Gross Salary</strong></td><td><strong>${rec.gross}</strong></td><td><strong>Total Deductions</strong></td><td><strong>${rec.totalDed}</strong></td></tr>
+  <tr><td colspan=4 style="text-align:left;padding-top:8px"><strong>Deductions breakdown:</strong></td></tr>
+  <tr><td>PF</td><td>${rec.pf}</td><td>Advance Deduction</td><td>${rec.advDed||0}</td></tr>
+  <tr><td>ESI</td><td>${rec.esi}</td><td>Leave Deduction (LOP)</td><td>${rec.lop}</td></tr>
+  <tr><td>Extra</td><td>${rec.extra}</td><td></td><td></td></tr>
+  <tr><td colspan=4 style="text-align:center;padding-top:8px"><strong>Net Salary: ${rec.net}</strong></td></tr>
+  <tr><td colspan=4 style="padding-top:8px">FY ${fy}-${fy+1} Paid Leaves Used: ${paidUsed} | Balance: ${leaveBal}</td></tr>
+  </tbody></table>
+  <div class="small muted" style="margin-top:8px">Generated on: ${new Date().toLocaleString()}</div></div>`; qs('slipBody').innerHTML = html; })
+qs('printSlip').addEventListener('click',()=>{ const content = qs('slipContent').innerHTML; if(!content || content.trim().length===0){alert('No slip to print'); return;} const w = window.open('','_blank'); w.document.write('<html><head><title>Salary Slip</title></head><body style="font-family:Arial, Helvetica, sans-serif;padding:20px">'+content+'</body></html>'); w.document.close(); w.print(); })
+
+// ADVANCE ledger
+function addAdvanceTransaction(empId, date, amount, type='manual', note=''){ const id = empId + '|' + (date||new Date().toISOString().slice(0,7)) + '|' + (Math.random().toString(36).slice(2,9)); advances.push({id, empId, date: date||new Date().toISOString().slice(0,7), amount: Number(amount), type, note}); saveAdv(); renderAdvanceList(empId); }
+
+qs('addAdvance').addEventListener('click',()=>{ const emp=qs('a_empId').value; if(!emp){alert('Choose employee'); return;} const date=qs('a_date').value||new Date().toISOString().slice(0,7); const amount=Number(qs('a_amount').value||0); const note=qs('a_note').value||''; if(amount===0){ if(!confirm('Amount is zero. Continue?')) return; } addAdvanceTransaction(emp, date, amount, amount>0?'taken':'deduction', note); renderEntries(); renderMaster(); alert('Advance transaction recorded'); })
+
+qs('exportAdvance').addEventListener('click',()=>{ if(advances.length===0){alert('No records'); return;} const cols=['id','empId','date','amount','type','note']; const csv = cols.join(',') + '\n' + advances.map(r=>cols.map(c=>JSONstring(r[c])).join(',')).join('\n'); downloadFile('advances.csv', csv); })
+
+function renderAdvanceList(empId){ const target = qs('advanceList'); const sel = qs('a_empId').value || empId || ''; const rows = advances.filter(a=> a.empId === sel); let html = ''; if(!sel){ html = '<div class="muted">Select employee to view ledger</div>'; target.innerHTML = html; return; } if(rows.length===0){ html = '<div class="muted">No ledger records for this employee.</div>'; } else{ html = '<table><thead><tr><th>Date</th><th>Amount</th><th>Type</th><th>Note</th></tr></thead><tbody>'; rows.forEach(r=> html += `<tr><td>${r.date}</td><td>${r.amount}</td><td>${r.type}</td><td>${r.note||''}</td></tr>`); html += '</tbody></table>'; } const balance = rows.reduce((s,x)=>s + Number(x.amount||0),0); html += `<div style="margin-top:8px"><strong>Balance:</strong> ${round(balance)}</div>`; target.innerHTML = html; }
+
+qs('a_empId').addEventListener('change',()=>{ renderAdvanceList(); })
+
+function JSONstring(s){ if(s===undefined || s===null) return ''; const str = String(s); if(str.includes(',')||str.includes('"')||str.includes('\n')) return '"'+str.replace(/"/g,'""')+'"'; return str }
+function downloadFile(name, text, mime='text/csv'){ const a=document.createElement('a'); a.href='data:'+mime+';charset=utf-8,'+encodeURIComponent(text); a.download=name; a.click(); }
+
+// SUMMARY
+qs('showSummary').addEventListener('click',()=>{ const month = qs('sum_month').value.trim(); if(!month){alert('enter month'); return;} const rows = entries.filter(e=>e.month===month); if(rows.length===0){qs('summaryArea').innerHTML = '<div class="muted">No entries for that month.</div>'; return;} let html = '<table style="width:100%"><thead><tr><th>EmpID</th><th>Name</th><th>Basic</th><th>HRA</th><th>DA</th><th>Other</th><th>Gross</th><th>PF</th><th>ESI</th><th>LOP</th><th>AdvanceDed</th><th>ExtraDed</th><th>TotalDed</th><th>Net</th></tr></thead><tbody>';
+  let totals = {gross:0,pf:0,esi:0,lop:0,adv:0,extra:0,totalDed:0,net:0};
+  rows.forEach(r=>{ const m = masters.find(x=>x.empId===r.empId) || {name:''}; html += `<tr><td>${r.empId}</td><td>${m.name}</td><td>${m.basic}</td><td>${m.hra}</td><td>${m.da}</td><td>${m.other}</td><td>${r.gross}</td><td>${r.pf}</td><td>${r.esi}</td><td>${r.lop}</td><td>${r.advDed||0}</td><td>${r.extra}</td><td>${r.totalDed}</td><td>${r.net}</td></tr>`; totals.gross+=Number(r.gross||0); totals.pf+=Number(r.pf||0); totals.esi+=Number(r.esi||0); totals.lop+=Number(r.lop||0); totals.adv+=Number(r.advDed||0); totals.extra+=Number(r.extra||0); totals.totalDed+=Number(r.totalDed||0); totals.net+=Number(r.net||0); });
+  html += `<tr style="font-weight:bold;background:#fafafa"><td colspan="6">Totals</td><td>${round(totals.gross)}</td><td>${round(totals.pf)}</td><td>${round(totals.esi)}</td><td>${round(totals.lop)}</td><td>${round(totals.adv)}</td><td>${round(totals.extra)}</td><td>${round(totals.totalDed)}</td><td>${round(totals.net)}</td></tr>`;
+  html += '</tbody></table>';
+  qs('summaryArea').innerHTML = html; })
+
+qs('printSummary').addEventListener('click',()=>{ const content = qs('summaryArea').innerHTML; if(!content || content.trim().length===0){alert('No summary to print'); return;} const w = window.open('','_blank'); w.document.write('<html><head><title>Monthly Summary</title></head><body style="font-family:Arial;padding:20px">'+content+'</body></html>'); w.document.close(); w.print(); })
+
+qs('exportSummary').addEventListener('click',()=>{ const month = qs('sum_month').value.trim(); if(!month){alert('enter month'); return;} const rows = entries.filter(e=>e.month===month); if(rows.length===0){alert('No entries'); return;} const cols=['empId','month','gross','pf','esi','advDed','lop','extra','totalDed','net']; const csv = cols.join(',') + '\n' + rows.map(r=>cols.map(c=>JSONstring(r[c])).join(',')).join('\n'); downloadFile('summary_'+month+'.csv', csv); })
+
+// Exports / Imports and backups
+qs('exportMaster').addEventListener('click',()=>{ if(masters.length===0){alert('nothing to export'); return;} const cols=['empId','name','desig','dept','basic','hra','da','other','annualLeave','pfApp','esiApp']; const csv = cols.join(',') + '\n' + masters.map(r=>cols.map(c=>JSONstring(r[c])).join(',')).join('\n'); downloadFile('master.csv', csv); })
+
+qs('exportEntries').addEventListener('click',()=>{ if(entries.length===0){alert('nothing to export'); return;} const cols=['empId','month','gross','pf','esi','advDed','lop','extra','totalDed','net']; const csv = cols.join(',') + '\n' + entries.map(r=>cols.map(c=>JSONstring(r[c])).join(',')).join('\n'); downloadFile('entries.csv', csv); })
+
+qs('exportLeaves').addEventListener('click',()=>{ if(leaveRequests.length===0){alert('No leaves'); return;} const cols=['id','empId','month','days','type','status','reason']; const csv = cols.join(',') + '\n' + leaveRequests.map(r=>cols.map(c=>JSONstring(r[c])).join(',')).join('\n'); downloadFile('leaves.csv', csv); })
+
+// Import Master CSV (simple)
+qs('importMasterBtn').addEventListener('click',()=>qs('masterFile').click());
+qs('masterFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ const text=ev.target.result; const lines=text.split('\n').filter(Boolean); const hdr=lines.shift().split(',').map(s=>s.trim()); lines.forEach(l=>{ const vals = l.split(','); const obj={}; hdr.forEach((h,i)=> obj[h]=vals[i]||''); obj.basic=Number(obj.basic||0); obj.hra=Number(obj.hra||0); obj.da=Number(obj.da||0); obj.other=Number(obj.other||0); obj.annualLeave=Number(obj.annualLeave||12); obj.pfApp = (String(obj.pfApp).toLowerCase()==='true' || String(obj.pfApp).toLowerCase()==='yes'); obj.esiApp = (String(obj.esiApp).toLowerCase()==='true' || String(obj.esiApp).toLowerCase()==='yes'); const idx=masters.findIndex(x=>x.empId===obj.empId); if(idx>=0) masters[idx]=obj; else masters.push(obj); }); saveMaster(); renderMaster(); refreshSelects(); alert('Imported master CSV'); }; r.readAsText(f); })
+
+// Import Entries CSV
+qs('importEntriesBtn').addEventListener('click',()=>qs('entriesFile').click());
+qs('entriesFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ const text=ev.target.result; const lines=text.split('\n').filter(Boolean); const hdr=lines.shift().split(',').map(s=>s.trim()); lines.forEach(l=>{ const vals=l.split(','); const obj={}; hdr.forEach((h,i)=> obj[h]=vals[i]||''); obj.gross=Number(obj.gross||0); obj.pf=Number(obj.pf||0); obj.esi=Number(obj.esi||0); obj.advDed=Number(obj.advDed||0); obj.lop=Number(obj.lop||0); obj.extra=Number(obj.extra||0); obj.totalDed=Number(obj.totalDed||0); obj.net=Number(obj.net||0); obj.empId = obj.empId || obj.empId; obj.id = obj.empId + '|' + obj.month; const idx = entries.findIndex(x=>x.id===obj.id); if(idx>=0) entries[idx]=obj; else entries.push(obj); }); saveEntries(); renderEntries(); alert('Imported entries'); }; r.readAsText(f); })
+
+// Backup & Restore
+qs('backupAll').addEventListener('click',()=>{ const payload={masters,entries,leavesData,advances,leaveRequests, exportedOn:new Date().toISOString()}; downloadFile('salary_backup_'+new Date().toISOString().slice(0,10)+'.json', JSON.stringify(payload,null,2), 'application/json'); })
+qs('restoreAllBtn').addEventListener('click',()=>qs('restoreFile').click());
+qs('restoreFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=ev=>{ try{ const obj = JSON.parse(ev.target.result); if(obj.masters) masters = obj.masters; if(obj.entries) entries = obj.entries; if(obj.leavesData) leavesData = obj.leavesData; if(obj.advances) advances = obj.advances; if(obj.leaveRequests) leaveRequests = obj.leaveRequests; saveMaster(); saveEntries(); saveLeaves(); saveAdv(); saveLeaveReq(); renderMaster(); renderEntries(); refreshSelects(); alert('Data restored'); } catch(err){ alert('Invalid file'); } }; r.readAsText(f); })
+
+// Utility to render initial state
+function init(){ if(!masters.length) newEmployeeForm(); renderMaster(); renderEntries(); refreshSelects(); renderAdvanceList(); renderLeavesTable(); }
+
+init();
+</script>
+</body>
+</html>

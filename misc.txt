@@ -1,0 +1,21 @@
+node sign-license.js 43d21cf058eae0e6861b7daf79ddfbd61ff0df6d971362bd0a607872fd92877f timetable,payslip,progress 2026-10-13
+
+eyJwYXlsb2FkIjp7Imluc3RhbGxhdGlvbklkIjoiNDNkMjFjZjA1OGVhZTBlNjg2MWI3ZGFmNzlkZGZiZDYxZmYwZGY2ZDk3MTM2MmJkMGE2MDc4NzJmZDkyODc3ZiIsIm1vZHVsZXMiOlsidGltZXRhYmxlIiwicGF5c2xpcCIsInByb2dyZXNzIl0sImlzc3VlZEF0IjoiMjAyNS0xMC0xOVQwNTozMjozNC42NDZaIiwiZXhwaXJlc0F0IjoiMjAyNi0xMC0xMyJ9LCJzaWduYXR1cmUiOiJXMTdsL0ZXZjVydFJZUGRuK0l6VFp0WUtQd2p1b2I4d0tRbnRhWFlkclhvbktLOXFHb2RqU3huU1FYVnAvUE5ueG1ERHhPUnQxdFNJWGk1OFI3RVd6UVowZ1JjakZJNy9ZV29sV2c2enpOdXdVd2xCb0dMc0VLb204T1VTUHJyTHZQdDVqSnBYaVBKWVlHeFRpc2I1WElzWFp1VGRkTnpwR3BQQWxUNzNtbXI5Z1hCZUdnemgzZ3R1czVZSk9aYUw2Y2xRWlFBRSs4OEJGR1J3aHllT1NHcHA0N0F4ellBREVDODliOXdpR2tjV2ZjUGQ1NlE0L0h4clV6V0dwMnlNVTFSU2JsRWU5WURCNXJDVmpSenFtRFowUWR6Y1oxc29Fa2NIUms3M04yWHRidHlzeC9EUDFkTlp1VzJaNTBJaGd3dmhnVVp6SjBjVml5WXRISFBrTHc9PSJ9
+
+43d21cf058eae0e6861b7daf79ddfbd61ff0df6d971362bd0a607872fd92877f
+
+
+"provider": "github",
+    "owner": "pkvsrajput", 
+    "repo": "smartschool-dashboard"
+
+"name": "smart-school-electron",
+  "version": "1.0.0",
+  "description": "SmartSchool Dashboard with License System",
+  "main": "main.js",
+  "author": "PKVS Rajput",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  
