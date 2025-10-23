@@ -1,0 +1,21 @@
+appId: com.smartschool.dashboard
+productName: SmartSchool Dashboard
+directories:
+  buildResources: assets
+asar: false
+files:
+  - main.js
+  - preload.js
+  - renderer.js
+  - dashboard.js
+  - index.html
+  - modules/**
+  - assets/**
+  - public.pem
+  - package.json
+publish:
+  provider: github
+  owner: pkvsrajput
+  repo: smartschool-dashboard
+win:
+  target: nsis

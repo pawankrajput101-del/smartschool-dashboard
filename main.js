@@ -19,6 +19,8 @@ function createWindow() {
   mainWindow.loadFile("index.html");
 }
 
+
+
 app.whenReady().then(() => {
   const dataDir = app.getPath("userData");
   const licensePath = path.join(dataDir, "license.json");
@@ -52,19 +54,22 @@ app.whenReady().then(() => {
   createWindow();
 const { autoUpdater } = require("electron-updater");
 
-autoUpdater.checkForUpdatesAndNotify();
+if (app.isPackaged) {
+  autoUpdater.checkForUpdatesAndNotify();
 
-autoUpdater.on("update-downloaded", () => {
-  const { dialog } = require("electron");
-  dialog.showMessageBox({
-    type: "info",
-    title: "Update Ready",
-    message: "A new version is available. Restart to apply?",
-    buttons: ["Restart", "Later"]
-  }).then(result => {
-    if (result.response === 0) autoUpdater.quitAndInstall();
+  autoUpdater.on("update-available", () => {
+    console.log("Update available. Downloading...");
   });
-});
+
+  autoUpdater.on("update-downloaded", () => {
+    console.log("Update downloaded. Will install on quit.");
+    autoUpdater.quitAndInstall();
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Auto-update error:", err);
+  });
+}
 
 });
 

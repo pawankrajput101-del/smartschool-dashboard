@@ -97,17 +97,30 @@
     return i[code] || "📁";
   }
 
+const path = require('path');
+const { loadModule: requireModule } = require('./moduleLoader');
+
 async function loadModule(m) {
   console.log("Loading module:", m.code);
 
-  const result = await window.electronAPI.resolveModule(m.code);
-  console.log("Resolve result:", result);
+  try {
+    // Load JS module safely inside ASAR
+    const moduleJs = requireModule(m.code);
+    console.log("Module loaded:", moduleJs);
 
-  if (result.found) {
+    // Load HTML inside iframe using ASAR-safe path
+   
+
+const htmlPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'app.asar', 'modules', m.code + '.html')
+  : path.join(__dirname, 'modules', m.code + '.html');
+
+frame.src = `file://${htmlPath}`;
+
+
     moduleHeader.textContent = m.name;
-    frame.src = `file://${__dirname}/modules/${m.code}.html`;
-
-  } else {
+  } catch (err) {
+    console.error(err);
     alert(`Module "${m.code}" not found on this system.`);
   }
 }
